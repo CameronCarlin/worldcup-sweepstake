@@ -274,6 +274,7 @@
         <button class="btn btn-ghost" id="copy-btn">Copy for Slack</button>
         <button class="btn btn-ghost admin-only" id="rerun-btn">Re-draw</button>
         <button class="btn btn-ghost admin-only" id="export-btn">Publish update</button>
+        <button class="btn btn-ghost admin-only" id="token-btn" title="set a GitHub token to publish from any device">GitHub token</button>
         <button class="btn btn-ghost admin-only" id="reset-btn">Reset</button>
       </div>
       <div class="player-grid" id="player-grid"></div>
@@ -825,10 +826,43 @@ function copyDash() {
   navigator.clipboard.writeText(txt).then(() => toast("STANDINGS COPIED — POST THE CHAOS"));
 }
 
-// Publish: save state.json straight into the repo folder via the File System
-// Access API (picked once, remembered in IndexedDB) — the launchd watcher
-// commits and pushes it automatically. Falls back to a plain download
-// (+ ./publish.sh) in browsers without the API.
+// Publish, in order of preference:
+// 1) Straight to GitHub from the browser (Contents API allows CORS) using a
+//    fine-grained token pasted once per browser — works from any device,
+//    nothing local needed. Each publish is a commit, keeping the audit trail.
+// 2) Save state.json into the local repo folder via the File System Access
+//    API (picked once, remembered in IndexedDB) — the launchd watcher on the
+//    Mac commits and pushes it.
+// 3) Plain download + ./publish.sh, for browsers with neither.
+const GH_REPO = "CameronCarlin/worldcup-sweepstake";
+const GH_TOKEN_KEY = "wc2026-gh-token";
+
+function b64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  bytes.forEach(b => (bin += String.fromCharCode(b)));
+  return btoa(bin);
+}
+
+async function publishViaGitHub(json) {
+  const token = localStorage.getItem(GH_TOKEN_KEY);
+  if (!token) return false; // not configured on this browser
+  const api = `https://api.github.com/repos/${GH_REPO}/contents/state.json`;
+  const headers = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" };
+  let sha;
+  const cur = await fetch(`${api}?ref=main&cb=${Date.now()}`, { headers });
+  if (cur.ok) sha = (await cur.json()).sha;
+  else if (cur.status !== 404) throw new Error("GitHub API " + cur.status);
+  const res = await fetch(api, {
+    method: "PUT", headers,
+    body: JSON.stringify({
+      message: "chore(sweepstake): update tournament state",
+      content: b64(json), branch: "main", ...(sha ? { sha } : {}),
+    }),
+  });
+  if (!res.ok) throw new Error("GitHub API " + res.status);
+  return true;
+}
 const idb = {
   open: () => new Promise((res, rej) => {
     const r = indexedDB.open("sweepstake-db", 1);
@@ -855,6 +889,12 @@ const idb = {
 async function publishState() {
   if (!state) return;
   const json = JSON.stringify(state, null, 2);
+  try {
+    if (await publishViaGitHub(json)) { toast("PUBLISHED TO GITHUB — LIVE IN ~1 MIN"); return; }
+  } catch (e) {
+    toast("GITHUB PUBLISH FAILED (" + e.message + ") — CHECK THE TOKEN");
+    return;
+  }
   if (!window.showSaveFilePicker) { downloadState(json); return; }
   try {
     let handle = await idb.get("stateFile");
@@ -913,6 +953,22 @@ $("rerun-btn").addEventListener("click", () => {
 $("copy-btn").addEventListener("click", copyDraw);
 $("copy-dash-btn").addEventListener("click", copyDash);
 $("export-btn").addEventListener("click", publishState);
+$("token-btn").addEventListener("click", () => {
+  const has = !!localStorage.getItem(GH_TOKEN_KEY);
+  const t = prompt(
+    "Paste a fine-grained GitHub token to publish straight from this browser.\n" +
+    "Create one at github.com → Settings → Developer settings → Fine-grained tokens:\n" +
+    "  · Repository access: only " + GH_REPO + "\n" +
+    "  · Permissions: Contents — Read and write\n\n" +
+    (has ? "A token is already saved here. Paste a new one to replace it, or type CLEAR to remove it." : ""), ""
+  );
+  if (t === null) return;
+  const v = t.trim();
+  if (!v) return;
+  if (v.toUpperCase() === "CLEAR") { localStorage.removeItem(GH_TOKEN_KEY); toast("TOKEN CLEARED"); return; }
+  localStorage.setItem(GH_TOKEN_KEY, v);
+  toast("TOKEN SAVED — PUBLISH NOW GOES STRAIGHT TO GITHUB");
+});
 $("reset-btn").addEventListener("click", () => {
   if (!confirm("Clear everything and start over?")) return;
   localStorage.removeItem(STORE_KEY);

@@ -30,16 +30,18 @@ updates on the team board.
 
 ## Publishing updates
 
-Click **Publish update** on the admin page. The page saves `state.json`
-straight into this repo folder (File System Access API — you pick the file
-once, it's remembered), and a launchd watcher
-(`~/Library/LaunchAgents/com.cameroncarlin.sweepstake-autopublish.plist`)
-commits and pushes it automatically. GitHub Pages redeploys in about a minute,
-and every update is a public commit, so it's all above board.
+Click **Publish update** on the admin page. Three paths, tried in order:
 
-Fallback (other browsers/machines): the button downloads `state.json` instead —
-publish it with:
+1. **From any device (recommended):** click **GitHub token** once per browser
+   and paste a fine-grained token (repository access: only this repo;
+   permissions: Contents read/write). Publish then commits `state.json`
+   directly via the GitHub API — nothing local needed, works from a phone.
+2. **On the Mac with the repo:** without a token, the page saves `state.json`
+   into the repo folder (File System Access API — pick the file once) and the
+   launchd watcher (`com.cameroncarlin.sweepstake-autopublish`) commits and
+   pushes it.
+3. **Anywhere else:** the button downloads `state.json`; publish it with
+   `./publish.sh ~/Downloads/state.json`.
 
-```sh
-./publish.sh ~/Downloads/state.json
-```
+GitHub Pages redeploys in about a minute either way, and every update is a
+public commit, so it's all above board.
