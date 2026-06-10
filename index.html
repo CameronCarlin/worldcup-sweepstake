@@ -228,6 +228,9 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 22px; padding: 70px 20px 30px;
   }
+  /* open from plain black: UI fades up once .revealed lands */
+  .draw-overlay > :not(#confetti) { opacity: 0; transform: translateY(10px); transition: opacity .7s ease, transform .7s ease; }
+  .draw-overlay.revealed > :not(#confetti) { opacity: 1; transform: none; }
   .do-top {
     position: absolute; top: 0; left: 0; right: 0;
     display: flex; gap: 18px; align-items: center; padding: 12px 20px;
@@ -892,25 +895,32 @@ function triggerSkip() {
   skipHooks = [];
 }
 
-function spinReel(remaining, target, rng, dur) {
+// Build the reel (machine visibly loaded, parked at the top) — spin separately,
+// so the first reel can be pre-loaded before the draw starts.
+function buildReel(remaining, target, rng) {
+  const strip = $("slot-strip");
+  const pool = remaining.filter(t => t.name !== target.name);
+  const items = [];
+  const loops = Math.max(3, Math.ceil(16 / Math.max(remaining.length, 1)));
+  for (let i = 0; i < loops; i++) items.push(...shuffle([...remaining], rng));
+  items.push(target);
+  items.push(pool.length ? shuffle([...pool], rng)[0] : target); // neighbour below the landing row
+  strip.innerHTML = items.map(t => `<div class="slot-item">${t.flag} ${esc(t.name)}</div>`).join("");
+  strip.style.transition = "none";
+  strip.style.transform = "translateY(0)";
+  return { targetIdx: items.length - 2 };
+}
+
+function spinBuiltReel(built, dur) {
   return new Promise(res => {
     const strip = $("slot-strip");
-    const pool = remaining.filter(t => t.name !== target.name);
-    const items = [];
-    const loops = Math.max(3, Math.ceil(16 / Math.max(remaining.length, 1)));
-    for (let i = 0; i < loops; i++) items.push(...shuffle([...remaining], rng));
-    items.push(target);
-    items.push(pool.length ? shuffle([...pool], rng)[0] : target); // neighbour below the landing row
-    strip.innerHTML = items.map(t => `<div class="slot-item">${t.flag} ${esc(t.name)}</div>`).join("");
-    const h = 72, targetIdx = items.length - 2;
-    const endY = -(targetIdx - 1) * h; // land target in the centre band
-    strip.style.transition = "none";
-    strip.style.transform = "translateY(0)";
+    const h = 72;
+    const endY = -(built.targetIdx - 1) * h; // land target in the centre band
     const land = () => {
       strip.classList.remove("spinning");
       strip.style.transition = "none";
       strip.style.transform = `translateY(${endY}px)`;
-      const el = strip.children[targetIdx];
+      const el = strip.children[built.targetIdx];
       if (el) el.classList.add("hit");
       res();
     };
@@ -995,11 +1005,12 @@ async function playDrawAnimation() {
   const rng = mulberry32((state.seed ^ 0x5EED5) >>> 0);
   skipDraw = false; skipHooks = [];
   const ov = $("draw-overlay");
-  ov.hidden = false;
+  ov.hidden = false; // plain black first…
   document.body.style.overflow = "hidden";
   $("do-meta").textContent = "";
   $("do-player").textContent = "READY";
   $("slot-strip").innerHTML = "";
+  setTimeout(() => ov.classList.add("revealed"), 350); // …then the UI fades up
   const totalPulls = players.reduce((s, p) => s + p.teams.length, 0);
   let pull = 0;
 
@@ -1014,6 +1025,8 @@ async function playDrawAnimation() {
     for (const { pl, team } of turn) {
       if (skipDraw) break;
       pull++;
+      // pre-load the very first reel so the machine never sits empty
+      let built = pull === 1 ? buildReel(remaining, team, rng) : null;
       await waitForNext(pull === 1 ? "Start the draw ▸" : "Next pull ▸");
       if (skipDraw) break;
       $("do-count").textContent = `PULL ${pull} / ${totalPulls}`;
@@ -1022,7 +1035,8 @@ async function playDrawAnimation() {
       nameEl.classList.remove("pop"); void nameEl.offsetWidth; nameEl.classList.add("pop");
       $("do-meta").textContent = "";
       await doPause(800);
-      await spinReel(remaining, team, rng, remaining.length === 1 ? 1200 : (pot === 1 ? 3400 : 2600));
+      if (!built) built = buildReel(remaining, team, rng);
+      await spinBuiltReel(built, remaining.length === 1 ? 1200 : (pot === 1 ? 3400 : 2600));
       if (!skipDraw) celebrate(false);
       $("do-meta").innerHTML = `${team.flag} <b>${esc(team.name)}</b> · FIFA #${team.rank} · GRP ${team.group} → <b>${esc(pl.name)}</b>`;
       remaining = remaining.filter(t => t.name !== team.name);
@@ -1039,6 +1053,7 @@ async function playDrawAnimation() {
     await waitForNext("Close ▸");
   }
   confParts = [];
+  ov.classList.remove("revealed");
   ov.hidden = true;
   document.body.style.overflow = "";
   $("do-label").textContent = "Now drawing";
