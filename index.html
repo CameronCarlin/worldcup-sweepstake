@@ -1438,6 +1438,32 @@ $("group-grid").addEventListener("click", e => {
 $("log-refresh").addEventListener("click", () => loadResults(true));
 setInterval(loadResults, 5 * 60 * 1000);
 
+// Keep always-open viewer tabs (office TV) in sync: poll the published
+// state and re-render when a new version lands. Admin tabs keep their
+// working copy; demo mode never syncs.
+async function pollPublishedState() {
+  if (demoMode || isAdminHash()) return;
+  if (!readOnly && state) return; // local working copy in play
+  try {
+    const r = await fetch("state.json", { cache: "no-store" });
+    if (!r.ok) return;
+    const j = await r.json();
+    if (!j || !Array.isArray(j.names) || !j.seed) return;
+    if (state && (j.updatedAt || 0) === (state.updatedAt || 0)) return;
+    state = j;
+    if (!state.dash) state.dash = freshDash();
+    if (!readOnly) {
+      readOnly = true;
+      document.body.classList.add("view-only");
+      const pill = $("modepill");
+      pill.textContent = "LIVE";
+      pill.classList.add("viewer");
+    }
+    renderAll();
+  } catch (e) { /* file:// or offline — ignore */ }
+}
+setInterval(pollPublishedState, 3 * 60 * 1000);
+
 // ---------- init ----------
 (async function init() {
   // published state (state.json next to index.html) is the shared source of
