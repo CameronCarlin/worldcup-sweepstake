@@ -258,6 +258,7 @@
   .slot-strip { will-change: transform; }
   .slot-strip.spinning { filter: blur(1.2px); }
   #do-next { min-width: 240px; }
+  #confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
   .slot-item {
     height: 72px; display: flex; align-items: center; justify-content: center; gap: 14px;
     font-weight: 900; font-size: clamp(17px, 4vw, 28px);
@@ -432,6 +433,7 @@
 <div class="toast" id="toast"></div>
 
 <div class="draw-overlay" id="draw-overlay" hidden>
+  <canvas id="confetti" aria-hidden="true"></canvas>
   <div class="do-top">
     <span>STACKONE_WC26 // LIVE_DRAW</span>
     <span id="do-pot"></span>
@@ -929,6 +931,51 @@ function renderPotChips(remaining) {
     `<span class="do-chip">${t.flag} ${esc(t.name)}</span>`).join("");
 }
 
+// Confetti — fire-and-forget canvas particles in the house palette.
+let confParts = [], confRunning = false;
+function confettiBurst(cx, cy, count = 70) {
+  const cv = $("confetti");
+  if (cv.width !== cv.offsetWidth || cv.height !== cv.offsetHeight) {
+    cv.width = cv.offsetWidth; cv.height = cv.offsetHeight;
+  }
+  const colors = ["#c8ff00", "#c8ff00", "#ff3b00", "#f4f4f0"];
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 4 + Math.random() * 9;
+    confParts.push({
+      x: cx, y: cy,
+      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 5.5,
+      w: 4 + Math.random() * 6, h: 2 + Math.random() * 4,
+      rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.4,
+      c: colors[(Math.random() * colors.length) | 0],
+      life: 65 + Math.random() * 40,
+    });
+  }
+  if (!confRunning) { confRunning = true; requestAnimationFrame(confTick); }
+}
+function confTick() {
+  const cv = $("confetti"), ctx = cv.getContext("2d");
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  confParts = confParts.filter(p => p.life > 0 && p.y < cv.height + 30);
+  for (const p of confParts) {
+    p.x += p.vx; p.y += p.vy; p.vy += 0.26; p.vx *= 0.99; p.rot += p.vr; p.life--;
+    ctx.save();
+    ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+    ctx.globalAlpha = Math.min(1, p.life / 30);
+    ctx.fillStyle = p.c;
+    ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+    ctx.restore();
+  }
+  if (confParts.length) requestAnimationFrame(confTick);
+  else { confRunning = false; ctx.clearRect(0, 0, cv.width, cv.height); }
+}
+function celebrate(big) {
+  const r = document.querySelector(".slot-window").getBoundingClientRect();
+  const midY = r.top + r.height / 2;
+  confettiBurst(r.left + 16, midY, big ? 110 : 55);
+  confettiBurst(r.right - 16, midY, big ? 110 : 55);
+  if (big) confettiBurst(r.left + r.width / 2, r.top, 140);
+}
+
 function waitForNext(label) {
   if (skipDraw) return Promise.resolve();
   const btn = $("do-next");
@@ -976,6 +1023,7 @@ async function playDrawAnimation() {
       $("do-meta").textContent = "";
       await doPause(800);
       await spinReel(remaining, team, rng, remaining.length === 1 ? 1200 : (pot === 1 ? 3400 : 2600));
+      if (!skipDraw) celebrate(false);
       $("do-meta").innerHTML = `${team.flag} <b>${esc(team.name)}</b> · FIFA #${team.rank} · GRP ${team.group} → <b>${esc(pl.name)}</b>`;
       remaining = remaining.filter(t => t.name !== team.name);
       renderPotChips(remaining);
@@ -987,8 +1035,10 @@ async function playDrawAnimation() {
     $("do-player").textContent = "DRAW COMPLETE";
     $("do-meta").innerHTML = `${totalPulls} PULLS · 48 TEAMS · POT <b>${gbp(48 * ENTRY_PRICE)}</b> · GOOD LUCK`;
     $("do-remaining").innerHTML = "";
+    celebrate(true);
     await waitForNext("Close ▸");
   }
+  confParts = [];
   ov.hidden = true;
   document.body.style.overflow = "";
   $("do-label").textContent = "Now drawing";
