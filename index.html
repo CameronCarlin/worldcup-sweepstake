@@ -19,6 +19,8 @@
     --line: #0e0e0c;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* the hidden attribute must always win, even over display:flex/grid rules */
+  [hidden] { display: none !important; }
   html { scroll-behavior: smooth; }
   body {
     font-family: "Archivo", -apple-system, "Segoe UI", sans-serif;
