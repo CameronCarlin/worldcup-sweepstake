@@ -221,6 +221,61 @@
   .toast.show { opacity: 1; }
   .empty-dash { padding: 26px; font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--muted); border: 1px dashed var(--line); }
 
+  /* ---- draw show (slot machine) ---- */
+  .draw-overlay {
+    position: fixed; inset: 0; z-index: 60;
+    background: #0c0c0a; color: var(--paper);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 22px; padding: 70px 20px 30px;
+  }
+  .do-top {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; gap: 18px; align-items: center; padding: 12px 20px;
+    border-bottom: 1px solid #26261f;
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 1.5px;
+    text-transform: uppercase; color: #8a8a80;
+  }
+  .do-top #do-pot { color: var(--acid); font-weight: 600; }
+  .do-top .btn { margin-left: auto; color: var(--paper); border-color: #3a3a32; }
+  .do-top .btn:hover { background: var(--acid); color: var(--ink); border-color: var(--acid); }
+  .do-label { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 4px; color: #8a8a80; text-transform: uppercase; }
+  .do-player {
+    font-weight: 900; font-size: clamp(30px, 6vw, 54px); line-height: 1;
+    letter-spacing: 1px; text-transform: uppercase; color: var(--acid);
+    min-height: 1em; text-align: center;
+  }
+  .do-player.pop { animation: do-pop .35s ease; }
+  @keyframes do-pop { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .slot-window {
+    width: min(640px, 94vw); height: 216px; overflow: hidden; position: relative;
+    background: var(--paper); color: var(--ink); border: 2px solid var(--acid);
+  }
+  .slot-window::before {
+    content: ""; position: absolute; top: 72px; left: 0; right: 0; height: 72px;
+    border-top: 2px solid var(--acid); border-bottom: 2px solid var(--acid);
+    pointer-events: none; z-index: 2;
+  }
+  .slot-strip { will-change: transform; }
+  .slot-strip.spinning { filter: blur(1.6px); }
+  .slot-item {
+    height: 72px; display: flex; align-items: center; justify-content: center; gap: 14px;
+    font-weight: 900; font-size: clamp(17px, 4vw, 28px);
+    text-transform: uppercase; letter-spacing: .5px; white-space: nowrap;
+  }
+  .slot-item.hit { background: var(--acid); animation: do-hit .45s; }
+  @keyframes do-hit { 0%, 40% { background: var(--ink); color: var(--acid); } 100% { background: var(--acid); color: var(--ink); } }
+  .do-meta {
+    font-family: "IBM Plex Mono", monospace; font-size: 13px; letter-spacing: 1px;
+    color: #c9c9c1; min-height: 18px; text-align: center; text-transform: uppercase;
+  }
+  .do-meta b { color: var(--acid); }
+  .do-remaining { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 860px; }
+  .do-chip {
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: .5px;
+    padding: 2px 8px; border: 1px solid #3a3a32; color: #c9c9c1; white-space: nowrap;
+  }
+  .do-chip.taken { opacity: .3; text-decoration: line-through; }
+
   /* ---- view-only mode ---- */
   body.view-only .admin-only { display: none !important; }
   body.view-only .stage-sel, body.view-only .outbtn,
@@ -275,6 +330,7 @@
     <div id="results-card" hidden>
       <div id="results-bar">
         <span class="seed-tag">DRAW_ID <code id="seed-display"></code> — same entries + same ID always reproduces this draw</span>
+        <button class="btn btn-ghost" id="replay-btn">▶ Replay the draw</button>
         <button class="btn btn-ghost" id="copy-btn">Copy for Slack</button>
         <button class="btn btn-ghost admin-only" id="rerun-btn">Re-draw</button>
         <button class="btn btn-ghost admin-only" id="export-btn">Publish update</button>
@@ -374,6 +430,20 @@
 </footer>
 
 <div class="toast" id="toast"></div>
+
+<div class="draw-overlay" id="draw-overlay" hidden>
+  <div class="do-top">
+    <span>STACKONE_WC26 // LIVE_DRAW</span>
+    <span id="do-pot"></span>
+    <span id="do-count"></span>
+    <button class="btn btn-ghost" id="do-skip">Skip to results</button>
+  </div>
+  <div class="do-label" id="do-label">Now drawing</div>
+  <div class="do-player" id="do-player"></div>
+  <div class="slot-window"><div class="slot-strip" id="slot-strip"></div></div>
+  <div class="do-meta" id="do-meta"></div>
+  <div class="do-remaining" id="do-remaining"></div>
+</div>
 
 <script id="draw-logic">
 // --- Pure draw + scoring logic (no DOM) -------------------------------------
@@ -591,7 +661,7 @@ function updateMeta() {
 
 function newSeed() { return (crypto.getRandomValues(new Uint32Array(1))[0] % 900000) + 100000; }
 
-function doDraw(seed) {
+async function doDraw(seed) {
   const names = parseNames($("names").value);
   if (names.length < 2 || names.length > 48) { updateMeta(); return; }
   state = {
@@ -600,6 +670,7 @@ function doDraw(seed) {
     dash: freshDash(),
   };
   save();
+  await playDrawAnimation(); // the show — result is already locked in above
   renderAll();
   $("sec-draw").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -798,6 +869,116 @@ function renderResults(payload, stale) {
   }).join("");
 }
 
+// ---------- the draw show (slot machine) ----------
+// Pure theatre over the already-decided result: the reel always lands on the
+// team runDraw assigned. Reel order is seeded from the draw ID too, so
+// "Replay the draw" shows the exact same show to anyone who missed it live.
+let skipDraw = false, skipHooks = [];
+function doPause(ms) {
+  if (skipDraw) return Promise.resolve();
+  return new Promise(res => {
+    const t = setTimeout(fin, ms);
+    function fin() { clearTimeout(t); res(); }
+    skipHooks.push(fin);
+  });
+}
+function triggerSkip() {
+  skipDraw = true;
+  skipHooks.forEach(f => { try { f(); } catch (e) {} });
+  skipHooks = [];
+}
+
+function spinReel(remaining, target, rng, dur) {
+  return new Promise(res => {
+    const strip = $("slot-strip");
+    const pool = remaining.filter(t => t.name !== target.name);
+    const items = [];
+    const loops = Math.max(3, Math.ceil(16 / Math.max(remaining.length, 1)));
+    for (let i = 0; i < loops; i++) items.push(...shuffle([...remaining], rng));
+    items.push(target);
+    items.push(pool.length ? shuffle([...pool], rng)[0] : target); // neighbour below the landing row
+    strip.innerHTML = items.map(t => `<div class="slot-item">${t.flag} ${esc(t.name)}</div>`).join("");
+    const h = 72, targetIdx = items.length - 2;
+    const endY = -(targetIdx - 1) * h; // land target in the centre band
+    strip.style.transition = "none";
+    strip.style.transform = "translateY(0)";
+    const land = () => {
+      strip.classList.remove("spinning");
+      strip.style.transition = "none";
+      strip.style.transform = `translateY(${endY}px)`;
+      const el = strip.children[targetIdx];
+      if (el) el.classList.add("hit");
+      res();
+    };
+    if (skipDraw) { land(); return; }
+    strip.classList.add("spinning");
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      strip.style.transition = `transform ${dur}ms cubic-bezier(0.12, 0.75, 0.18, 1)`;
+      strip.style.transform = `translateY(${endY}px)`;
+    }));
+    const t = setTimeout(fin, dur + 80);
+    function fin() { clearTimeout(t); land(); }
+    skipHooks.push(fin);
+  });
+}
+
+function renderPotChips(potTeams, taken) {
+  $("do-remaining").innerHTML = potTeams.map(t =>
+    `<span class="do-chip ${taken.has(t.name) ? "taken" : ""}">${t.flag} ${esc(t.name)}</span>`).join("");
+}
+
+async function playDrawAnimation() {
+  if (!state || !$("draw-overlay").hidden) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const { players, potCount, base } = drawResult();
+  const rng = mulberry32((state.seed ^ 0x5EED5) >>> 0);
+  skipDraw = false; skipHooks = [];
+  const ov = $("draw-overlay");
+  ov.hidden = false;
+  document.body.style.overflow = "hidden";
+  $("do-meta").textContent = "";
+  const totalPulls = players.reduce((s, p) => s + p.teams.length, 0);
+  let pull = 0;
+
+  for (let pot = 1; pot <= potCount && !skipDraw; pot++) {
+    const turn = players
+      .map(pl => ({ pl, team: pl.teams.find(t => t.pot === pot) }))
+      .filter(x => x.team);
+    const potTeams = turn.map(x => x.team);
+    const taken = new Set();
+    let remaining = [...potTeams];
+    $("do-pot").textContent = pot > base ? "EXTRA PULLS · BOTTOM BAND" : `POT ${pot} / ${potCount}`;
+    renderPotChips(potTeams, taken);
+
+    for (const { pl, team } of turn) {
+      if (skipDraw) break;
+      pull++;
+      $("do-count").textContent = `PULL ${pull} / ${totalPulls}`;
+      const nameEl = $("do-player");
+      nameEl.textContent = pl.name;
+      nameEl.classList.remove("pop"); void nameEl.offsetWidth; nameEl.classList.add("pop");
+      $("do-meta").textContent = "";
+      await doPause(650);
+      await spinReel(remaining, team, rng, remaining.length === 1 ? 900 : (pot === 1 ? 2400 : 1700));
+      $("do-meta").innerHTML = `${team.flag} <b>${esc(team.name)}</b> · FIFA #${team.rank} · GRP ${team.group} → <b>${esc(pl.name)}</b>`;
+      taken.add(team.name);
+      remaining = remaining.filter(t => t.name !== team.name);
+      renderPotChips(potTeams, taken);
+      await doPause(950);
+    }
+  }
+
+  if (!skipDraw) {
+    $("do-label").textContent = "That's the lot";
+    $("do-player").textContent = "DRAW COMPLETE";
+    $("do-meta").innerHTML = `${totalPulls} PULLS · 48 TEAMS · POT <b>${gbp(48 * ENTRY_PRICE)}</b> · GOOD LUCK`;
+    await doPause(1800);
+  }
+  ov.hidden = true;
+  document.body.style.overflow = "";
+  $("do-label").textContent = "Now drawing";
+}
+
 // ---------- copy / export ----------
 function copyDraw() {
   const { players, base } = drawResult();
@@ -953,6 +1134,8 @@ $("draw-btn").addEventListener("click", () => {
 $("rerun-btn").addEventListener("click", () => {
   if (confirm("Re-draw with a new random draw ID? Assignments change and the dashboard resets.")) doDraw();
 });
+$("replay-btn").addEventListener("click", () => playDrawAnimation());
+$("do-skip").addEventListener("click", triggerSkip);
 $("copy-btn").addEventListener("click", copyDraw);
 $("copy-dash-btn").addEventListener("click", copyDash);
 $("export-btn").addEventListener("click", publishState);
