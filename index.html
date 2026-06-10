@@ -622,6 +622,7 @@ const STORE_KEY = "wc2026-sweepstake-v4";
 const isAdminHash = () => /admin/.test(location.hash);
 let state = null;     // { names, rosterText, seed, dash, updatedAt }
 let readOnly = false; // true when serving published state to a non-admin viewer
+let demoMode = false; // ?demo — sample names, auto-runs the show, never saves
 
 function freshDash() { return { stages: {}, bootTeam: null, bootPlayer: "", gloveTeam: null, glovePlayer: "" }; }
 
@@ -676,7 +677,7 @@ async function doDraw(seed) {
 }
 
 function save() {
-  if (readOnly || !state) return;
+  if (readOnly || demoMode || !state) return;
   state.updatedAt = Date.now();
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
 }
@@ -1239,6 +1240,19 @@ setInterval(loadResults, 5 * 60 * 1000);
   renderAll();
   refreshTokenStatus();
   loadResults();
+
+  // ?demo — watch the draw show with sample names; nothing is saved
+  if (new URLSearchParams(location.search).has("demo") && !readOnly) {
+    demoMode = true;
+    $("modepill").textContent = "DEMO";
+    const demoNames = ["Tom", "Cameron", "Alice", "Bob", "Priya", "Dan", "Maya", "Chris", "Sam", "Jules", "Nina", "Omar", "Lena", "Raj"];
+    $("names").value = demoNames.join("\n");
+    updateMeta();
+    state = { names: demoNames, rosterText: demoNames.join("\n"), seed: 424242, dash: freshDash() };
+    toast("DEMO MODE — NOTHING SAVES");
+    await playDrawAnimation();
+    renderAll();
+  }
 })();
 </script>
 </body>
