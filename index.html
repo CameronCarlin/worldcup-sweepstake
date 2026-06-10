@@ -113,7 +113,9 @@
   #results-bar .seed-tag { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); margin-right: auto; }
   #results-bar .seed-tag code { background: var(--ink); color: var(--acid); padding: 3px 10px; font-weight: 600; }
 
-  .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .player-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 980px) { .player-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .player-grid { grid-template-columns: 1fr; } }
   .player-card { background: var(--panel); border: 1px solid var(--line); padding: 0; }
   .player-card .pc-head {
     display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
@@ -121,18 +123,17 @@
   }
   .player-card h3 { font-size: 16px; font-weight: 900; text-transform: uppercase; letter-spacing: .3px; }
   .player-card .stat { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--muted); white-space: nowrap; }
-  .team-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-top: 1px solid var(--hairline); }
+  .team-row { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-top: 1px solid var(--hairline); }
   .team-row:first-of-type { border-top: none; }
-  .team-row .flag { font-size: 20px; line-height: 1; }
-  .team-row .tname { flex: 1; font-weight: 600; font-size: 14px; }
-  .team-row .tmeta { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+  .team-row .flag { font-size: 18px; line-height: 1; }
+  .team-row .tname { flex: 1; font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team-row .tmeta { font-family: "IBM Plex Mono", monospace; font-size: 10px; color: var(--muted); white-space: nowrap; }
   .badge {
     font-family: "IBM Plex Mono", monospace; font-size: 9.5px; font-weight: 600;
     letter-spacing: .5px; padding: 2px 7px; text-transform: uppercase; white-space: nowrap;
   }
   .badge.pot1 { background: var(--acid); color: var(--ink); }
   .badge.bonus { background: var(--ink); color: var(--acid); }
-  .badge.spoon { background: var(--signal); color: #fff; }
 
   /* ---- prizes ---- */
   .prize-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 0; border: 1px solid var(--line); background: var(--line); grid-gap: 1px; }
@@ -286,7 +287,7 @@
   body.view-only .admin-only { display: none !important; }
   body.view-only .stage-sel, body.view-only .outbtn,
   body.view-only #boot-team, body.view-only #glove-team,
-  body.view-only #boot-player, body.view-only #glove-player { pointer-events: none; opacity: .6; }
+  body.view-only #spoon-team { pointer-events: none; opacity: .6; }
 </style>
 </head>
 <body>
@@ -357,20 +358,21 @@
       <div class="prize-controls">
         <div class="ctl">
           <h4>👟 Golden Boot — top scorer's team</h4>
-          <div class="row"><select id="boot-team"></select></div>
-          <div class="row admin-only"><input type="text" id="boot-player" placeholder="Player name (optional)"></div>
-          <div class="hint">Current leader — provisional until the final whistle.</div>
+          <div class="hint" id="boot-info" style="margin-top:2px; font-size:13px; color:var(--ink)"></div>
+          <div class="row admin-only"><select id="boot-team"></select></div>
+          <div class="hint">Tracked automatically from the live feed (own goals don't count). Pick a team only to override.</div>
         </div>
         <div class="ctl">
           <h4>🧤 Golden Glove — best keeper's team</h4>
-          <div class="row"><select id="glove-team"></select></div>
-          <div class="row admin-only"><input type="text" id="glove-player" placeholder="Keeper name (optional)"></div>
-          <div class="hint">Current leader — provisional until the final whistle.</div>
+          <div class="hint" id="glove-info" style="margin-top:2px; font-size:13px; color:var(--ink)"></div>
+          <div class="row admin-only"><select id="glove-team"></select></div>
+          <div class="hint">Auto-tracked as most clean sheets (tie: fewest conceded). Override with the official award at the end.</div>
         </div>
         <div class="ctl">
-          <h4>🥄 Wooden Spoon — FIFA's bottom seed</h4>
+          <h4>🥄 Wooden Spoon — worst group-stage team</h4>
           <div class="hint" id="spoon-info" style="margin-top:2px; font-size:13px; color:var(--ink)"></div>
-          <div class="hint">Locked in at the draw — the lowest-ranked team in the tournament.</div>
+          <div class="row admin-only"><select id="spoon-team"></select></div>
+          <div class="hint">Bottom of the combined group-stage table (points → goal difference → goals scored). Locks itself when all 72 group games are done.</div>
         </div>
       </div>
     </div>
@@ -420,7 +422,8 @@
         <li>All 48 teams are ordered by the <strong>FIFA World Ranking (April 2026)</strong> — the final ranking before the tournament.</li>
         <li>Teams are split into <strong>seeded pots</strong>: Pot 1 holds one top team for every player, Pot 2 the next band, and so on. Everyone draws <strong>one team from every pot</strong>.</li>
         <li>Each pull is a <strong>random draw within its pot</strong> — completely random, but the favourites are always spread out. Nobody can land both of the top two seeds.</li>
-        <li>If 48 doesn't split evenly, the leftover teams become <strong>extra pulls from the bottom band</strong> — who gets them is decided inside the same seeded draw, so it's reproducible from the draw ID (and the lucky dippers get a shot at the Wooden Spoon money 🥄).</li>
+        <li>If 48 doesn't split evenly, the leftover teams become <strong>extra pulls from the bottom band</strong> — who gets them is decided inside the same seeded draw, so it's reproducible from the draw ID.</li>
+        <li>🥄 The <strong>Wooden Spoon</strong> goes to the worst-performing team of the group stage — bottom of the combined table on points, goal difference, then goals scored — tracked automatically from the results.</li>
       </ol>
     </div>
   </section>
@@ -577,13 +580,108 @@ const STAGES = [
 ];
 const STAGE_ORDER = Object.fromEntries(STAGES.map((s, i) => [s.key, i]));
 
-function woodenSpoonTeam() {
-  return [...TEAMS].sort((a, b) => b.rank - a.rank)[0];
+// --- wooden spoon: the worst team of the group stage --------------------
+// Bottom of the combined group-stage table: fewest points, then worst goal
+// difference, then fewest goals scored; final tie-break goes against the
+// lower FIFA ranking. Built automatically from the live results feed.
+const GROUP_STAGE_CUTOFF = Date.parse("2026-06-28T08:00:00Z"); // R32 kicks off later on 28 June
+
+function normTeamName(s) {
+  return String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]/g, "");
+}
+const TEAM_LOOKUP = (() => {
+  const map = {};
+  TEAMS.forEach(t => (map[normTeamName(t.name)] = t.name));
+  // names the scores feed may use
+  Object.entries({
+    usa: "United States",
+    cotedivoire: "Ivory Coast",
+    turkey: "Türkiye",
+    caboverde: "Cape Verde",
+    iriran: "Iran",
+    congodr: "DR Congo",
+    democraticrepublicofthecongo: "DR Congo",
+    korearepublic: "South Korea",
+    bosniaandherzegovina: "Bosnia & Herzegovina",
+    czechrepublic: "Czechia",
+  }).forEach(([k, v]) => (map[k] = v));
+  return map;
+})();
+function resolveTeam(feedName) {
+  const our = TEAM_LOOKUP[normTeamName(feedName)];
+  return our ? TEAMS.find(t => t.name === our) : null;
+}
+
+function spoonStanding(matches) {
+  const gm = (matches || []).filter(m => Date.parse(m.date) < GROUP_STAGE_CUTOFF);
+  const rows = {};
+  let counted = 0;
+  for (const m of gm) {
+    if (m.state !== "post") continue;
+    const home = resolveTeam(m.home), away = resolveTeam(m.away);
+    const hs = parseInt(m.hs, 10), as = parseInt(m.as, 10);
+    if (!home || !away || isNaN(hs) || isNaN(as)) continue;
+    counted++;
+    const r = n => (rows[n] = rows[n] || { pts: 0, gd: 0, gf: 0, played: 0 });
+    const h = r(home.name), a = r(away.name);
+    h.played++; a.played++;
+    h.gf += hs; a.gf += as;
+    h.gd += hs - as; a.gd += as - hs;
+    if (hs > as) h.pts += 3; else if (hs < as) a.pts += 3; else { h.pts++; a.pts++; }
+  }
+  if (!counted) return { team: null, complete: false, row: null };
+  const complete = gm.length >= 72 && gm.every(m => m.state === "post");
+  const ranked = Object.keys(rows)
+    .map(name => ({ team: TEAMS.find(t => t.name === name), ...rows[name] }))
+    .sort((x, y) => x.pts - y.pts || x.gd - y.gd || x.gf - y.gf || y.team.rank - x.team.rank);
+  return { team: ranked[0].team, complete, row: ranked[0] };
+}
+
+// Golden Boot: top scorer across the tournament (own goals excluded).
+function topScorer(matches) {
+  const tally = {};
+  for (const m of matches || []) {
+    if (m.state === "pre") continue;
+    for (const s of m.scorers || []) {
+      const team = s.team ? resolveTeam(s.team) : null;
+      if (!team) continue;
+      const k = s.player + "|" + team.name;
+      tally[k] = tally[k] || { player: s.player, team, goals: 0 };
+      tally[k].goals++;
+    }
+  }
+  const all = Object.values(tally).sort((a, b) => b.goals - a.goals || a.player.localeCompare(b.player));
+  if (!all.length) return null;
+  return { ...all[0], joint: all.length > 1 && all[1].goals === all[0].goals };
+}
+
+// Golden Glove proxy: most clean sheets, tie-break fewest goals conceded.
+function cleanSheetLeader(matches) {
+  const rows = {};
+  for (const m of matches || []) {
+    if (m.state !== "post") continue;
+    const home = resolveTeam(m.home), away = resolveTeam(m.away);
+    const hs = parseInt(m.hs, 10), as = parseInt(m.as, 10);
+    if (!home || !away || isNaN(hs) || isNaN(as)) continue;
+    const r = n => (rows[n] = rows[n] || { cs: 0, conceded: 0, played: 0 });
+    const h = r(home.name), a = r(away.name);
+    h.played++; a.played++;
+    h.conceded += as; a.conceded += hs;
+    if (as === 0) h.cs++;
+    if (hs === 0) a.cs++;
+  }
+  const all = Object.keys(rows)
+    .map(n => ({ team: TEAMS.find(t => t.name === n), ...rows[n] }))
+    .sort((x, y) => y.cs - x.cs || x.conceded - y.conceded || x.team.rank - y.team.rank);
+  if (!all.length || all[0].cs === 0) return null;
+  return { ...all[0], joint: all.length > 1 && all[1].cs === all[0].cs && all[1].conceded === all[0].conceded };
 }
 
 // Compute prize holders + per-player winnings from draw + dashboard state.
 // The pot is £5 per person in the draw — teams are divided between them.
-function computeStandings(players, dash) {
+// `awards` carries the feed-derived (or overridden) boot/glove/spoon holders.
+function computeStandings(players, dash, awards) {
+  awards = awards || {};
   const pot = players.length * ENTRY_PRICE;
   const prize = Object.fromEntries(PRIZES.map(p => [p.key, pot * p.pct]));
 
@@ -593,14 +691,14 @@ function computeStandings(players, dash) {
   const stageOf = name => (dash.stages[name] || { stage: "GROUP", out: false });
   const champion = TEAMS.find(t => stageOf(t.name).stage === "WIN");
   const runnerUp = TEAMS.find(t => stageOf(t.name).stage === "RU");
-  const spoon = woodenSpoonTeam();
+  const held = a => (a && a.team ? { team: a.team, owner: ownerOf[a.team.name] } : null);
 
   const holders = {
     winner: champion ? { team: champion, owner: ownerOf[champion.name] } : null,
     runner: runnerUp ? { team: runnerUp, owner: ownerOf[runnerUp.name] } : null,
-    boot:   dash.bootTeam  ? { team: TEAMS.find(t => t.name === dash.bootTeam),  owner: ownerOf[dash.bootTeam]  } : null,
-    glove:  dash.gloveTeam ? { team: TEAMS.find(t => t.name === dash.gloveTeam), owner: ownerOf[dash.gloveTeam] } : null,
-    spoon:  { team: spoon, owner: ownerOf[spoon.name] },
+    boot:   held(awards.boot),
+    glove:  held(awards.glove),
+    spoon:  held(awards.spoon),
   };
 
   const rows = players.map(pl => {
@@ -632,7 +730,7 @@ let state = null;     // { names, rosterText, seed, dash, updatedAt }
 let readOnly = false; // true when serving published state to a non-admin viewer
 let demoMode = false; // ?demo — sample names, auto-runs the show, never saves
 
-function freshDash() { return { stages: {}, bootTeam: null, bootPlayer: "", gloveTeam: null, glovePlayer: "" }; }
+function freshDash() { return { stages: {}, bootTeam: null, gloveTeam: null, spoonOverride: null }; }
 
 // One name per line, each person once — the draw works out the pulls.
 function parseNames(text) {
@@ -706,8 +804,8 @@ function renderAll() {
   if (!has) { renderTeamsTable(null); $("band-pot").innerHTML = ""; return; }
 
   const { players, base } = drawResult();
-  const st = computeStandings(players, state.dash);
-  const spoon = woodenSpoonTeam();
+  const awards = resolveAwards();
+  const st = computeStandings(players, state.dash, awards);
 
   $("band-pot").innerHTML = `POT <b>${gbp(st.pot)}</b>`;
   $("seed-display").textContent = state.seed;
@@ -724,7 +822,6 @@ function renderAll() {
           <span class="tmeta">FIFA #${t.rank} · GRP ${t.group}</span>
           ${t.pot === 1 ? '<span class="badge pot1">POT 1</span>' : ""}
           ${t.pot > base ? '<span class="badge bonus">EXTRA PULL</span>' : ""}
-          ${t.name === spoon.name ? '<span class="badge spoon">🥄 SPOON</span>' : ""}
         </div>`).join("") +
     `</div>`;
   }).join("");
@@ -734,11 +831,15 @@ function renderAll() {
     `<div class="prize-card pot-card"><div class="ico">💰</div><div class="lbl">The Pot</div><div class="amt">${gbp(st.pot)}</div><div class="who">${players.length} × £5 — TOM'S MONZO</div></div>` +
     PRIZES.map(pz => {
       const h = st.holders[pz.key];
-      const locked = pz.key === "spoon" || ((pz.key === "winner" || pz.key === "runner") && h);
+      const locked =
+        (pz.key === "winner" || pz.key === "runner") ? !!h :
+        pz.key === "spoon" ? !!(awards.spoon && awards.spoon.complete) :
+        !!(awards[pz.key] && awards[pz.key].override);
       const who = h && h.owner
         ? `${h.team.flag} ${esc(h.team.name)} — ${esc(h.owner)}${locked ? "" : " (CURRENT)"}`
         : h && !h.owner ? `${h.team.flag} ${esc(h.team.name)} — UNOWNED`
-        : (pz.key === "winner" || pz.key === "runner") ? "TO BE DECIDED" : "NOT SET YET";
+        : (pz.key === "winner" || pz.key === "runner") ? "TO BE DECIDED"
+        : pz.key === "spoon" ? "DECIDED AFTER THE GROUPS" : "AWAITING FIRST RESULTS";
       return `<div class="prize-card ${h && h.owner && locked ? "won" : ""}">
         <div class="ico">${pz.ico}</div>
         <div class="lbl">${pz.label} · ${pz.pct * 100}%</div>
@@ -768,11 +869,21 @@ function renderAll() {
   // prize controls
   fillTeamSelect($("boot-team"), state.dash.bootTeam, st.ownerOf);
   fillTeamSelect($("glove-team"), state.dash.gloveTeam, st.ownerOf);
-  $("boot-player").value = state.dash.bootPlayer || "";
-  $("glove-player").value = state.dash.glovePlayer || "";
-  const sp = st.holders.spoon;
-  $("spoon-info").innerHTML = `${sp.team.flag} <b>${esc(sp.team.name)}</b> (FIFA #${sp.team.rank}) → ` +
-    (sp.owner ? `<b>${esc(sp.owner)}</b> banks ${gbp(st.prize.spoon)}` : `unowned spare — house rules`);
+  fillTeamSelect($("spoon-team"), state.dash.spoonOverride, st.ownerOf);
+
+  const ownerTag = h => (h && h.owner ? ` → <b>${esc(h.owner)}</b>` : h ? " → unowned" : "");
+  const b = awards.boot;
+  $("boot-info").innerHTML = b && b.team
+    ? `${b.team.flag} <b>${esc(b.team.name)}</b>${b.player ? ` — ${esc(b.player)}, ${b.goals} GOAL${b.goals === 1 ? "" : "S"}` : ""}${b.joint ? " (JOINT TOP — OVERRIDE TO SETTLE)" : ""}${b.override ? " (OVERRIDE)" : ""}${ownerTag(st.holders.boot)}`
+    : "No goals yet — tracks itself once they start going in.";
+  const g = awards.glove;
+  $("glove-info").innerHTML = g && g.team
+    ? `${g.team.flag} <b>${esc(g.team.name)}</b>${g.cs != null ? ` — ${g.cs} CLEAN SHEET${g.cs === 1 ? "" : "S"}, ${g.conceded} CONCEDED` : ""}${g.joint ? " (TIED — OVERRIDE TO SETTLE)" : ""}${g.override ? " (OVERRIDE)" : ""}${ownerTag(st.holders.glove)}`
+    : "No clean sheets yet — tracks itself from the results.";
+  const s = awards.spoon;
+  $("spoon-info").innerHTML = s && s.team
+    ? `${s.team.flag} <b>${esc(s.team.name)}</b>${s.row ? ` — ${s.row.pts} PTS, GD ${s.row.gd >= 0 ? "+" : ""}${s.row.gd}, ${s.row.played} PLAYED` : ""}${s.complete ? " — <b>FINAL</b>" : " — CURRENT WORST"}${s.override ? " (OVERRIDE)" : ""}${ownerTag(st.holders.spoon)}`
+    : "Builds from the group-stage table once results land.";
 
   renderTeamBoard(st);
   renderTeamsTable(players);
@@ -780,7 +891,7 @@ function renderAll() {
 
 function fillTeamSelect(sel, current, ownerOf) {
   const sorted = [...TEAMS].sort((a, b) => a.name.localeCompare(b.name));
-  sel.innerHTML = `<option value="">— not set —</option>` +
+  sel.innerHTML = `<option value="">— auto from results —</option>` +
     sorted.map(t => `<option value="${esc(t.name)}" ${t.name === current ? "selected" : ""}>${t.flag} ${t.name}${ownerOf[t.name] ? " (" + esc(ownerOf[t.name]) + ")" : ""}</option>`).join("");
 }
 
@@ -825,7 +936,8 @@ function renderTeamsTable(players) {
 // CORS-enabled) — no manual entry. Cached in localStorage so the log survives
 // a feed outage; refreshed on load and every 5 minutes while the page is open.
 const RESULTS_API = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=300";
-const RESULTS_CACHE_KEY = "wc2026-results-cache";
+const RESULTS_CACHE_KEY = "wc2026-results-cache-v2";
+let latestMatches = null; // feeds the results log AND the boot/glove/spoon trackers
 
 async function loadResults(manual) {
   try {
@@ -835,6 +947,20 @@ async function loadResults(manual) {
       const c = e.competitions[0];
       const home = c.competitors.find(x => x.homeAway === "home") || c.competitors[0];
       const away = c.competitors.find(x => x.homeAway === "away") || c.competitors[1];
+      const idToTeam = {};
+      c.competitors.forEach(x => {
+        if (x.id != null) idToTeam[x.id] = x.team.displayName;
+        if (x.team && x.team.id != null) idToTeam[x.team.id] = x.team.displayName;
+      });
+      const scorers = (c.details || [])
+        .filter(dt => {
+          const t = ((dt.type && dt.type.text) || "").toLowerCase();
+          return (t.includes("goal") && !t.includes("own")) || (t.includes("penalty") && t.includes("scored"));
+        })
+        .map(dt => ({
+          player: (dt.athletesInvolved && dt.athletesInvolved[0] && dt.athletesInvolved[0].displayName) || "Unknown",
+          team: idToTeam[dt.team && dt.team.id] || null,
+        }));
       return {
         date: e.date,
         round: ((e.season && e.season.slug) || "").replace(/-/g, " "),
@@ -842,18 +968,43 @@ async function loadResults(manual) {
         detail: e.status.type.shortDetail || "",
         home: home.team.displayName, hs: home.score,
         away: away.team.displayName, as: away.score,
+        scorers,
       };
     });
     const payload = { at: Date.now(), matches };
     localStorage.setItem(RESULTS_CACHE_KEY, JSON.stringify(payload));
+    latestMatches = matches;
     renderResults(payload, false);
+    if (state) renderAll(); // refresh boot/glove/spoon trackers
     if (manual) toast("RESULTS REFRESHED");
   } catch (err) {
     const cached = localStorage.getItem(RESULTS_CACHE_KEY);
-    if (cached) { try { renderResults(JSON.parse(cached), true); return; } catch (e) {} }
+    if (cached) {
+      try {
+        const payload = JSON.parse(cached);
+        latestMatches = payload.matches;
+        renderResults(payload, true);
+        if (state) renderAll();
+        return;
+      } catch (e) {}
+    }
     $("log-updated").textContent = "FEED UNREACHABLE";
     $("log-list").innerHTML = `<div class="log-empty">// COULDN'T REACH THE SCORES FEED — TRY REFRESH</div>`;
   }
+}
+
+function teamByName(name) { return TEAMS.find(t => t.name === name) || null; }
+
+// Boot/glove/spoon: feed-derived unless the admin has set an override.
+function resolveAwards() {
+  const aw = { boot: null, glove: null, spoon: null };
+  if (state && state.dash.bootTeam) aw.boot = { team: teamByName(state.dash.bootTeam), override: true };
+  else if (latestMatches) aw.boot = topScorer(latestMatches);
+  if (state && state.dash.gloveTeam) aw.glove = { team: teamByName(state.dash.gloveTeam), override: true };
+  else if (latestMatches) aw.glove = cleanSheetLeader(latestMatches);
+  if (state && state.dash.spoonOverride) aw.spoon = { team: teamByName(state.dash.spoonOverride), override: true, complete: true };
+  else if (latestMatches) aw.spoon = spoonStanding(latestMatches);
+  return aw;
 }
 
 function renderResults(payload, stale) {
@@ -1077,15 +1228,20 @@ function copyDraw() {
 
 function copyDash() {
   const { players } = drawResult();
-  const st = computeStandings(players, state.dash);
+  const awards = resolveAwards();
+  const st = computeStandings(players, state.dash, awards);
   const d = new Date();
   let txt = `⚽ StackOne WC2026 Sweepstakes — standings ${d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}\n`;
   txt += `💰 Pot ${gbp(st.pot)}\n\n`;
   PRIZES.forEach(pz => {
     const h = st.holders[pz.key];
+    const extra =
+      pz.key === "boot" && awards.boot && awards.boot.player ? ` (${awards.boot.player}, ${awards.boot.goals} goals)` :
+      pz.key === "glove" && awards.glove && awards.glove.cs != null ? ` (${awards.glove.cs} clean sheets)` :
+      pz.key === "spoon" && awards.spoon && awards.spoon.team && !awards.spoon.complete ? " (provisional)" : "";
     txt += `${pz.ico} ${pz.label} (${gbp(st.prize[pz.key])}): ` +
-      (h && h.owner ? `${h.team.flag} ${h.team.name} — ${h.owner}${pz.key === "boot" && state.dash.bootPlayer ? ` (${state.dash.bootPlayer})` : ""}${pz.key === "glove" && state.dash.glovePlayer ? ` (${state.dash.glovePlayer})` : ""}`
-        : h ? `${h.team.flag} ${h.team.name} — unowned` : "TBD") + "\n";
+      (h && h.owner ? `${h.team.flag} ${h.team.name} — ${h.owner}${extra}`
+        : h ? `${h.team.flag} ${h.team.name} — unowned${extra}` : "TBD") + "\n";
   });
   txt += `\n📋 Leaderboard:\n`;
   st.rows.forEach((r, i) => {
@@ -1254,8 +1410,7 @@ $("reset-btn").addEventListener("click", () => {
 
 $("boot-team").addEventListener("change", e => { if (readOnly) return; state.dash.bootTeam = e.target.value || null; save(); renderAll(); });
 $("glove-team").addEventListener("change", e => { if (readOnly) return; state.dash.gloveTeam = e.target.value || null; save(); renderAll(); });
-$("boot-player").addEventListener("input", e => { if (readOnly) return; state.dash.bootPlayer = e.target.value; save(); });
-$("glove-player").addEventListener("input", e => { if (readOnly) return; state.dash.glovePlayer = e.target.value; save(); });
+$("spoon-team").addEventListener("change", e => { if (readOnly) return; state.dash.spoonOverride = e.target.value || null; save(); renderAll(); });
 
 $("group-grid").addEventListener("change", e => {
   if (readOnly || !e.target.classList.contains("stage-sel")) return;
