@@ -1057,6 +1057,8 @@ async function playDrawAnimation() {
   ov.hidden = true;
   document.body.style.overflow = "";
   $("do-label").textContent = "Now drawing";
+  renderAll();
+  $("sec-draw").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ---------- copy / export ----------
