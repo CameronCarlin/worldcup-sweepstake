@@ -1241,8 +1241,9 @@ setInterval(loadResults, 5 * 60 * 1000);
   refreshTokenStatus();
   loadResults();
 
-  // ?demo — watch the draw show with sample names; nothing is saved
-  if (new URLSearchParams(location.search).has("demo") && !readOnly) {
+  // ?demo or #demo — watch the draw show with sample names; nothing is saved
+  // (hash also supported because macOS `open` strips queries from file:// URLs)
+  if ((new URLSearchParams(location.search).has("demo") || /demo/.test(location.hash)) && !readOnly) {
     demoMode = true;
     $("modepill").textContent = "DEMO";
     const demoNames = ["Tom", "Cameron", "Alice", "Bob", "Priya", "Dan", "Maya", "Chris", "Sam", "Jules", "Nina", "Omar", "Lena", "Raj"];
