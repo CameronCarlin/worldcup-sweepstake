@@ -256,7 +256,8 @@
     pointer-events: none; z-index: 2;
   }
   .slot-strip { will-change: transform; }
-  .slot-strip.spinning { filter: blur(1.6px); }
+  .slot-strip.spinning { filter: blur(1.2px); }
+  #do-next { min-width: 240px; }
   .slot-item {
     height: 72px; display: flex; align-items: center; justify-content: center; gap: 14px;
     font-weight: 900; font-size: clamp(17px, 4vw, 28px);
@@ -274,7 +275,6 @@
     font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: .5px;
     padding: 2px 8px; border: 1px solid #3a3a32; color: #c9c9c1; white-space: nowrap;
   }
-  .do-chip.taken { opacity: .3; text-decoration: line-through; }
 
   /* ---- view-only mode ---- */
   body.view-only .admin-only { display: none !important; }
@@ -442,6 +442,7 @@
   <div class="do-player" id="do-player"></div>
   <div class="slot-window"><div class="slot-strip" id="slot-strip"></div></div>
   <div class="do-meta" id="do-meta"></div>
+  <button class="btn btn-primary" id="do-next" hidden>Start the draw ▸</button>
   <div class="do-remaining" id="do-remaining"></div>
 </div>
 
@@ -923,9 +924,21 @@ function spinReel(remaining, target, rng, dur) {
   });
 }
 
-function renderPotChips(potTeams, taken) {
-  $("do-remaining").innerHTML = potTeams.map(t =>
-    `<span class="do-chip ${taken.has(t.name) ? "taken" : ""}">${t.flag} ${esc(t.name)}</span>`).join("");
+function renderPotChips(remaining) {
+  $("do-remaining").innerHTML = remaining.map(t =>
+    `<span class="do-chip">${t.flag} ${esc(t.name)}</span>`).join("");
+}
+
+function waitForNext(label) {
+  if (skipDraw) return Promise.resolve();
+  const btn = $("do-next");
+  btn.textContent = label;
+  btn.hidden = false;
+  return new Promise(res => {
+    function fin() { btn.hidden = true; btn.removeEventListener("click", fin); res(); }
+    btn.addEventListener("click", fin);
+    skipHooks.push(fin);
+  });
 }
 
 async function playDrawAnimation() {
@@ -938,6 +951,8 @@ async function playDrawAnimation() {
   ov.hidden = false;
   document.body.style.overflow = "hidden";
   $("do-meta").textContent = "";
+  $("do-player").textContent = "READY";
+  $("slot-strip").innerHTML = "";
   const totalPulls = players.reduce((s, p) => s + p.teams.length, 0);
   let pull = 0;
 
@@ -945,27 +960,25 @@ async function playDrawAnimation() {
     const turn = players
       .map(pl => ({ pl, team: pl.teams.find(t => t.pot === pot) }))
       .filter(x => x.team);
-    const potTeams = turn.map(x => x.team);
-    const taken = new Set();
-    let remaining = [...potTeams];
+    let remaining = turn.map(x => x.team);
     $("do-pot").textContent = pot > base ? "EXTRA PULLS · BOTTOM BAND" : `POT ${pot} / ${potCount}`;
-    renderPotChips(potTeams, taken);
+    renderPotChips(remaining);
 
     for (const { pl, team } of turn) {
       if (skipDraw) break;
       pull++;
+      await waitForNext(pull === 1 ? "Start the draw ▸" : "Next pull ▸");
+      if (skipDraw) break;
       $("do-count").textContent = `PULL ${pull} / ${totalPulls}`;
       const nameEl = $("do-player");
       nameEl.textContent = pl.name;
       nameEl.classList.remove("pop"); void nameEl.offsetWidth; nameEl.classList.add("pop");
       $("do-meta").textContent = "";
-      await doPause(650);
-      await spinReel(remaining, team, rng, remaining.length === 1 ? 900 : (pot === 1 ? 2400 : 1700));
+      await doPause(800);
+      await spinReel(remaining, team, rng, remaining.length === 1 ? 1200 : (pot === 1 ? 3400 : 2600));
       $("do-meta").innerHTML = `${team.flag} <b>${esc(team.name)}</b> · FIFA #${team.rank} · GRP ${team.group} → <b>${esc(pl.name)}</b>`;
-      taken.add(team.name);
       remaining = remaining.filter(t => t.name !== team.name);
-      renderPotChips(potTeams, taken);
-      await doPause(950);
+      renderPotChips(remaining);
     }
   }
 
@@ -973,7 +986,8 @@ async function playDrawAnimation() {
     $("do-label").textContent = "That's the lot";
     $("do-player").textContent = "DRAW COMPLETE";
     $("do-meta").innerHTML = `${totalPulls} PULLS · 48 TEAMS · POT <b>${gbp(48 * ENTRY_PRICE)}</b> · GOOD LUCK`;
-    await doPause(1800);
+    $("do-remaining").innerHTML = "";
+    await waitForNext("Close ▸");
   }
   ov.hidden = true;
   document.body.style.overflow = "";
