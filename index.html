@@ -258,7 +258,11 @@
     <div class="panel">
       <textarea id="names" placeholder="Tom&#10;Cameron&#10;Alice&#10;Bob&#10;Priya&#10;Dan&#10;Maya&#10;Chris&#10;Sam&#10;Jules&#10;Nina&#10;Omar&#10;Lena&#10;Raj" spellcheck="false"></textarea>
       <div class="setup-meta" id="setup-meta"></div>
-      <div style="margin-top:18px"><button class="btn btn-primary" id="draw-btn">Run the draw</button></div>
+      <div style="margin-top:18px; display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+        <button class="btn btn-primary" id="draw-btn">Run the draw</button>
+        <button class="btn btn-ghost" id="token-btn" title="paste a fine-grained GitHub token to publish from this browser">GitHub token</button>
+        <span class="mono" id="token-status" style="font-size:11px; color:var(--muted)"></span>
+      </div>
     </div>
   </section>
 
@@ -274,7 +278,6 @@
         <button class="btn btn-ghost" id="copy-btn">Copy for Slack</button>
         <button class="btn btn-ghost admin-only" id="rerun-btn">Re-draw</button>
         <button class="btn btn-ghost admin-only" id="export-btn">Publish update</button>
-        <button class="btn btn-ghost admin-only" id="token-btn" title="set a GitHub token to publish from any device">GitHub token</button>
         <button class="btn btn-ghost admin-only" id="reset-btn">Reset</button>
       </div>
       <div class="player-grid" id="player-grid"></div>
@@ -953,11 +956,16 @@ $("rerun-btn").addEventListener("click", () => {
 $("copy-btn").addEventListener("click", copyDraw);
 $("copy-dash-btn").addEventListener("click", copyDash);
 $("export-btn").addEventListener("click", publishState);
+function refreshTokenStatus() {
+  $("token-status").textContent = localStorage.getItem(GH_TOKEN_KEY)
+    ? "TOKEN SET ✓ PUBLISH GOES STRAIGHT TO GITHUB"
+    : "";
+}
 $("token-btn").addEventListener("click", () => {
   const has = !!localStorage.getItem(GH_TOKEN_KEY);
   const t = prompt(
     "Paste a fine-grained GitHub token to publish straight from this browser.\n" +
-    "Create one at github.com → Settings → Developer settings → Fine-grained tokens:\n" +
+    "Create one at: github.com/settings/personal-access-tokens/new\n" +
     "  · Repository access: only " + GH_REPO + "\n" +
     "  · Permissions: Contents — Read and write\n\n" +
     (has ? "A token is already saved here. Paste a new one to replace it, or type CLEAR to remove it." : ""), ""
@@ -965,9 +973,10 @@ $("token-btn").addEventListener("click", () => {
   if (t === null) return;
   const v = t.trim();
   if (!v) return;
-  if (v.toUpperCase() === "CLEAR") { localStorage.removeItem(GH_TOKEN_KEY); toast("TOKEN CLEARED"); return; }
+  if (v.toUpperCase() === "CLEAR") { localStorage.removeItem(GH_TOKEN_KEY); toast("TOKEN CLEARED"); refreshTokenStatus(); return; }
   localStorage.setItem(GH_TOKEN_KEY, v);
   toast("TOKEN SAVED — PUBLISH NOW GOES STRAIGHT TO GITHUB");
+  refreshTokenStatus();
 });
 $("reset-btn").addEventListener("click", () => {
   if (!confirm("Clear everything and start over?")) return;
@@ -1045,6 +1054,7 @@ setInterval(loadResults, 5 * 60 * 1000);
     updateMeta();
   }
   renderAll();
+  refreshTokenStatus();
   loadResults();
 })();
 </script>
