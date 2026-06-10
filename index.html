@@ -582,9 +582,9 @@ function woodenSpoonTeam() {
 }
 
 // Compute prize holders + per-player winnings from draw + dashboard state.
+// The pot is £5 per person in the draw — teams are divided between them.
 function computeStandings(players, dash) {
-  const totalEntries = players.reduce((s, p) => s + p.entries, 0);
-  const pot = totalEntries * ENTRY_PRICE;
+  const pot = players.length * ENTRY_PRICE;
   const prize = Object.fromEntries(PRIZES.map(p => [p.key, pot * p.pct]));
 
   const ownerOf = {};
@@ -613,7 +613,7 @@ function computeStandings(players, dash) {
     const alive = pl.teams.filter(t => !stageOf(t.name).out).length;
     const best = Math.max(...pl.teams.map(t => STAGE_ORDER[stageOf(t.name).stage]));
     return {
-      name: pl.name, entries: pl.entries, paid: pl.entries * ENTRY_PRICE,
+      name: pl.name, entries: pl.entries, paid: ENTRY_PRICE,
       teams: pl.teams, alive, total: pl.teams.length,
       best: STAGES[best], winnings, wins,
     };
@@ -662,10 +662,10 @@ function updateMeta() {
   if (bad) { meta.innerHTML = `<span class="warn">${bad}</span>`; return; }
   const base = Math.floor(48 / N), extra = 48 % N;
   meta.innerHTML =
-    `<span><strong>${N}</strong> PEOPLE</span>` +
+    `<span><strong>${N}</strong> PEOPLE × £5</span>` +
     `<span>48 TEAMS → <strong>${base}</strong> PULL${base === 1 ? "" : "S"} EACH` +
     (extra ? ` + <strong>${extra}</strong> EXTRA PULL${extra === 1 ? "" : "S"} DRAWN AT RANDOM` : "") + `</span>` +
-    `<span>POT <strong>${gbp(48 * ENTRY_PRICE)}</strong></span>`;
+    `<span>POT <strong>${gbp(N * ENTRY_PRICE)}</strong></span>`;
 }
 
 function newSeed() { return (crypto.getRandomValues(new Uint32Array(1))[0] % 900000) + 100000; }
@@ -716,7 +716,7 @@ function renderAll() {
   $("player-grid").innerHTML = players.map(pl => {
     const avg = (pl.teams.reduce((s, t) => s + t.rank, 0) / pl.teams.length).toFixed(1);
     return `<div class="player-card">
-      <div class="pc-head"><h3>${esc(pl.name)}</h3><span class="stat">${pl.entries} PULL${pl.entries === 1 ? "" : "S"} · ${gbp(pl.entries * ENTRY_PRICE)} · AVG RANK ${avg}</span></div>` +
+      <div class="pc-head"><h3>${esc(pl.name)}</h3><span class="stat">${pl.entries} PULL${pl.entries === 1 ? "" : "S"} · AVG RANK ${avg}</span></div>` +
       pl.teams.map(t => `
         <div class="team-row">
           <span class="flag">${t.flag}</span>
@@ -731,7 +731,7 @@ function renderAll() {
 
   // prize strip
   $("prize-strip").innerHTML =
-    `<div class="prize-card pot-card"><div class="ico">💰</div><div class="lbl">The Pot</div><div class="amt">${gbp(st.pot)}</div><div class="who">${players.reduce((s, p) => s + p.entries, 0)} × £5 — TOM'S MONZO</div></div>` +
+    `<div class="prize-card pot-card"><div class="ico">💰</div><div class="lbl">The Pot</div><div class="amt">${gbp(st.pot)}</div><div class="who">${players.length} × £5 — TOM'S MONZO</div></div>` +
     PRIZES.map(pz => {
       const h = st.holders[pz.key];
       const locked = pz.key === "spoon" || ((pz.key === "winner" || pz.key === "runner") && h);
@@ -749,12 +749,12 @@ function renderAll() {
 
   // leaderboard
   $("lb-table").innerHTML =
-    `<tr><th>#</th><th>Player</th><th>Entries</th><th>Teams in</th><th>Best run</th><th>Winnings</th><th>Squad</th></tr>` +
+    `<tr><th>#</th><th>Player</th><th>Pulls</th><th>Teams in</th><th>Best run</th><th>Winnings</th><th>Squad</th></tr>` +
     st.rows.map((r, i) => `
       <tr class="${i === 0 ? "first" : ""}">
         <td class="pos">${String(i + 1).padStart(2, "0")}</td>
         <td class="pname">${esc(r.name)}${r.wins.map(w => " " + w.ico).join("")}</td>
-        <td>${r.entries} <span style="color:var(--muted)">(${gbp(r.paid)})</span></td>
+        <td>${r.entries}</td>
         <td>${r.alive}/${r.total}</td>
         <td>${r.best.label}</td>
         <td><span class="money ${r.winnings ? "nonzero" : "zero"}">${gbp(r.winnings)}</span></td>
@@ -1049,7 +1049,7 @@ async function playDrawAnimation() {
   if (!skipDraw) {
     $("do-label").textContent = "That's the lot";
     $("do-player").textContent = "DRAW COMPLETE";
-    $("do-meta").innerHTML = `${totalPulls} PULLS · 48 TEAMS · POT <b>${gbp(48 * ENTRY_PRICE)}</b> · GOOD LUCK`;
+    $("do-meta").innerHTML = `${totalPulls} PULLS · 48 TEAMS · POT <b>${gbp(players.length * ENTRY_PRICE)}</b> · GOOD LUCK`;
     $("do-remaining").innerHTML = "";
     celebrate(true);
     await waitForNext("Close ▸");
@@ -1067,9 +1067,9 @@ async function playDrawAnimation() {
 function copyDraw() {
   const { players, base } = drawResult();
   let txt = `⚽ StackOne World Cup 2026 Sweepstakes — THE DRAW (ID ${state.seed})\n`;
-  txt += `${players.length} people · 48 teams · pot ${gbp(48 * ENTRY_PRICE)}\n\n`;
+  txt += `${players.length} people × £5 · 48 teams · pot ${gbp(players.length * ENTRY_PRICE)}\n\n`;
   players.forEach(pl => {
-    txt += `*${pl.name}* (${pl.entries} pull${pl.entries === 1 ? "" : "s"} · ${gbp(pl.entries * ENTRY_PRICE)}):\n` +
+    txt += `*${pl.name}* (${pl.entries} pull${pl.entries === 1 ? "" : "s"}):\n` +
       pl.teams.map(t => `  ${t.flag} ${t.name} (FIFA #${t.rank}, Grp ${t.group})${t.pot > base ? " — extra pull" : ""}`).join("\n") + "\n\n";
   });
   navigator.clipboard.writeText(txt).then(() => toast("DRAW COPIED — PASTE IT IN THE CHANNEL"));
