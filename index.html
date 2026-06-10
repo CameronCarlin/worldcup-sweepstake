@@ -173,15 +173,16 @@
   .teams-table .owner.none { color: var(--muted); font-weight: 400; }
 
   /* ---- results log ---- */
-  .log-add { display: flex; gap: 8px; margin-bottom: 16px; }
-  .log-add input { flex: 1; }
+  .log-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .log-bar .mono { font-size: 11px; color: var(--muted); letter-spacing: .5px; margin-right: auto; }
   .log-list { border: 1px solid var(--line); background: var(--panel); }
   .log-row { display: flex; align-items: baseline; gap: 14px; padding: 10px 16px; border-top: 1px solid var(--hairline); }
   .log-row:first-child { border-top: none; }
-  .log-row .when { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--muted); white-space: nowrap; min-width: 64px; }
+  .log-row .when { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--muted); white-space: nowrap; min-width: 52px; }
   .log-row .what { flex: 1; font-size: 14.5px; font-weight: 500; }
-  .log-row .del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 4px; }
-  .log-row .del:hover { color: var(--signal); }
+  .log-row .what b { font-weight: 900; }
+  .log-row .tag { font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .5px; color: var(--muted); white-space: nowrap; }
+  .log-row .tag.live { background: var(--signal); color: #fff; padding: 2px 8px; font-weight: 600; }
   .log-empty { padding: 18px; font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); }
 
   /* ---- team board ---- */
@@ -272,7 +273,7 @@
         <span class="seed-tag">DRAW_ID <code id="seed-display"></code> — same entries + same ID always reproduces this draw</span>
         <button class="btn btn-ghost" id="copy-btn">Copy for Slack</button>
         <button class="btn btn-ghost admin-only" id="rerun-btn">Re-draw</button>
-        <button class="btn btn-ghost admin-only" id="export-btn">Export state.json</button>
+        <button class="btn btn-ghost admin-only" id="export-btn">Publish update</button>
         <button class="btn btn-ghost admin-only" id="reset-btn">Reset</button>
       </div>
       <div class="player-grid" id="player-grid"></div>
@@ -322,13 +323,13 @@
   <section id="sec-log">
     <div class="sec-head">
       <span class="idx">05</span><h2>Results Log</h2>
-      <span class="note">Every result, on the record — all above board.</span>
+      <span class="note">Pulled automatically from the live scores feed — every result, on the record.</span>
     </div>
-    <div class="log-add admin-only">
-      <input type="text" id="log-input" placeholder="e.g. GROUP A — Mexico 2:1 South Africa">
-      <button class="btn" id="log-add-btn">Log it</button>
+    <div class="log-bar">
+      <span class="mono" id="log-updated"></span>
+      <button class="btn btn-ghost" id="log-refresh">Refresh</button>
     </div>
-    <div class="log-list" id="log-list"></div>
+    <div class="log-list" id="log-list"><div class="log-empty">// LOADING RESULTS…</div></div>
   </section>
 
   <section id="sec-board">
@@ -548,7 +549,7 @@ const isAdminHash = () => /admin/.test(location.hash);
 let state = null;     // { names, rosterText, seed, dash, updatedAt }
 let readOnly = false; // true when serving published state to a non-admin viewer
 
-function freshDash() { return { stages: {}, bootTeam: null, bootPlayer: "", gloveTeam: null, glovePlayer: "", results: [] }; }
+function freshDash() { return { stages: {}, bootTeam: null, bootPlayer: "", gloveTeam: null, glovePlayer: "" }; }
 
 // One name per line, each person once — the draw works out the pulls.
 function parseNames(text) {
@@ -618,7 +619,7 @@ function renderAll() {
   $("copy-dash-btn").hidden = !has;
   $("board-empty").hidden = has;
   $("group-grid").hidden = !has;
-  if (!has) { renderTeamsTable(null); renderLog(); $("band-pot").innerHTML = ""; return; }
+  if (!has) { renderTeamsTable(null); $("band-pot").innerHTML = ""; return; }
 
   const { players, base } = drawResult();
   const st = computeStandings(players, state.dash);
@@ -691,7 +692,6 @@ function renderAll() {
 
   renderTeamBoard(st);
   renderTeamsTable(players);
-  renderLog();
 }
 
 function fillTeamSelect(sel, current, ownerOf) {
@@ -737,20 +737,59 @@ function renderTeamsTable(players) {
     }).join("");
 }
 
-function renderLog() {
-  const list = $("log-list");
-  const results = (state && state.dash.results) || [];
-  if (!results.length) {
-    list.innerHTML = `<div class="log-empty">// NO RESULTS LOGGED YET</div>`;
+// Results pull straight from ESPN's open World Cup scoreboard feed (keyless,
+// CORS-enabled) — no manual entry. Cached in localStorage so the log survives
+// a feed outage; refreshed on load and every 5 minutes while the page is open.
+const RESULTS_API = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=300";
+const RESULTS_CACHE_KEY = "wc2026-results-cache";
+
+async function loadResults(manual) {
+  try {
+    const r = await fetch(RESULTS_API);
+    const d = await r.json();
+    const matches = (d.events || []).map(e => {
+      const c = e.competitions[0];
+      const home = c.competitors.find(x => x.homeAway === "home") || c.competitors[0];
+      const away = c.competitors.find(x => x.homeAway === "away") || c.competitors[1];
+      return {
+        date: e.date,
+        round: ((e.season && e.season.slug) || "").replace(/-/g, " "),
+        state: e.status.type.state, // pre | in | post
+        detail: e.status.type.shortDetail || "",
+        home: home.team.displayName, hs: home.score,
+        away: away.team.displayName, as: away.score,
+      };
+    });
+    const payload = { at: Date.now(), matches };
+    localStorage.setItem(RESULTS_CACHE_KEY, JSON.stringify(payload));
+    renderResults(payload, false);
+    if (manual) toast("RESULTS REFRESHED");
+  } catch (err) {
+    const cached = localStorage.getItem(RESULTS_CACHE_KEY);
+    if (cached) { try { renderResults(JSON.parse(cached), true); return; } catch (e) {} }
+    $("log-updated").textContent = "FEED UNREACHABLE";
+    $("log-list").innerHTML = `<div class="log-empty">// COULDN'T REACH THE SCORES FEED — TRY REFRESH</div>`;
+  }
+}
+
+function renderResults(payload, stale) {
+  const played = payload.matches.filter(m => m.state !== "pre");
+  played.sort((a, b) => new Date(b.date) - new Date(a.date));
+  $("log-updated").textContent = "UPDATED " +
+    new Date(payload.at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).toUpperCase() +
+    (stale ? " · CACHED" : "");
+  if (!played.length) {
+    const next = payload.matches.filter(m => m.state === "pre").sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+    $("log-list").innerHTML = `<div class="log-empty">// NO RESULTS YET${next ? " — FIRST UP: " + esc(next.home) + " V " + esc(next.away) + ", " + new Date(next.date).toLocaleString("en-GB", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).toUpperCase() : ""}</div>`;
     return;
   }
-  list.innerHTML = [...results].reverse().map((r, ri) => {
-    const i = results.length - 1 - ri; // index in original array
-    const when = new Date(r.d).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }).toUpperCase();
-    return `<div class="log-row" data-idx="${i}">
+  $("log-list").innerHTML = played.map(m => {
+    const when = new Date(m.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }).toUpperCase();
+    const live = m.state === "in";
+    return `<div class="log-row">
       <span class="when">${when}</span>
-      <span class="what">${esc(r.text)}</span>
-      <button class="del admin-only" title="delete">✕</button>
+      <span class="what">${esc(m.home)} <b>${m.hs ?? ""} : ${m.as ?? ""}</b> ${esc(m.away)}</span>
+      <span class="tag ${live ? "live" : ""}">${live ? "LIVE · " + esc(m.detail) : esc(m.round).toUpperCase()}</span>
     </div>`;
   }).join("");
 }
@@ -786,15 +825,69 @@ function copyDash() {
   navigator.clipboard.writeText(txt).then(() => toast("STANDINGS COPIED — POST THE CHAOS"));
 }
 
-function exportState() {
+// Publish: save state.json straight into the repo folder via the File System
+// Access API (picked once, remembered in IndexedDB) — the launchd watcher
+// commits and pushes it automatically. Falls back to a plain download
+// (+ ./publish.sh) in browsers without the API.
+const idb = {
+  open: () => new Promise((res, rej) => {
+    const r = indexedDB.open("sweepstake-db", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("kv");
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  }),
+  get: async k => {
+    const db = await idb.open();
+    return new Promise((res, rej) => {
+      const t = db.transaction("kv").objectStore("kv").get(k);
+      t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error);
+    });
+  },
+  set: async (k, v) => {
+    const db = await idb.open();
+    return new Promise((res, rej) => {
+      const t = db.transaction("kv", "readwrite").objectStore("kv").put(v, k);
+      t.onsuccess = () => res(); t.onerror = () => rej(t.error);
+    });
+  },
+};
+
+async function publishState() {
   if (!state) return;
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const json = JSON.stringify(state, null, 2);
+  if (!window.showSaveFilePicker) { downloadState(json); return; }
+  try {
+    let handle = await idb.get("stateFile");
+    if (handle) {
+      let perm = await handle.queryPermission({ mode: "readwrite" });
+      if (perm !== "granted") perm = await handle.requestPermission({ mode: "readwrite" });
+      if (perm !== "granted") handle = null;
+    }
+    if (!handle) {
+      handle = await window.showSaveFilePicker({
+        suggestedName: "state.json",
+        types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+      });
+      await idb.set("stateFile", handle);
+    }
+    const w = await handle.createWritable();
+    await w.write(json);
+    await w.close();
+    toast("PUBLISHED — AUTO-PUSH MAKES IT LIVE IN ~1 MIN");
+  } catch (e) {
+    if (e && e.name === "AbortError") return; // picker cancelled
+    downloadState(json);
+  }
+}
+
+function downloadState(json) {
+  const blob = new Blob([json], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = "state.json";
   a.click();
   URL.revokeObjectURL(a.href);
-  toast("STATE.JSON DOWNLOADED — COMMIT & PUSH TO PUBLISH");
+  toast("STATE.JSON DOWNLOADED — RUN ./publish.sh TO PUBLISH");
 }
 
 // ---------- shared ----------
@@ -811,7 +904,7 @@ function esc(s) {
 // ---------- events ----------
 $("names").addEventListener("input", updateMeta);
 $("draw-btn").addEventListener("click", () => {
-  if (state && !confirm("This replaces the existing draw AND resets the dashboard + results log. Continue?")) return;
+  if (state && !confirm("This replaces the existing draw AND resets the dashboard. Continue?")) return;
   doDraw();
 });
 $("rerun-btn").addEventListener("click", () => {
@@ -819,7 +912,7 @@ $("rerun-btn").addEventListener("click", () => {
 });
 $("copy-btn").addEventListener("click", copyDraw);
 $("copy-dash-btn").addEventListener("click", copyDash);
-$("export-btn").addEventListener("click", exportState);
+$("export-btn").addEventListener("click", publishState);
 $("reset-btn").addEventListener("click", () => {
   if (!confirm("Clear everything and start over?")) return;
   localStorage.removeItem(STORE_KEY);
@@ -855,22 +948,8 @@ $("group-grid").addEventListener("click", e => {
   save(); renderAll();
 });
 
-$("log-add-btn").addEventListener("click", addLog);
-$("log-input").addEventListener("keydown", e => { if (e.key === "Enter") addLog(); });
-function addLog() {
-  if (readOnly || !state) { if (!state) toast("RUN THE DRAW FIRST"); return; }
-  const text = $("log-input").value.trim();
-  if (!text) return;
-  state.dash.results.push({ d: Date.now(), text });
-  $("log-input").value = "";
-  save(); renderLog();
-}
-$("log-list").addEventListener("click", e => {
-  if (readOnly || !e.target.classList.contains("del")) return;
-  const idx = parseInt(e.target.closest(".log-row").dataset.idx, 10);
-  state.dash.results.splice(idx, 1);
-  save(); renderLog();
-});
+$("log-refresh").addEventListener("click", () => loadResults(true));
+setInterval(loadResults, 5 * 60 * 1000);
 
 // ---------- init ----------
 (async function init() {
@@ -906,11 +985,11 @@ $("log-list").addEventListener("click", e => {
 
   if (state) {
     if (!state.dash) state.dash = freshDash();
-    if (!state.dash.results) state.dash.results = [];
     $("names").value = state.rosterText || (state.names || []).join("\n");
     updateMeta();
   }
   renderAll();
+  loadResults();
 })();
 </script>
 </body>

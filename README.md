@@ -21,14 +21,25 @@ seeds. If 48 doesn't divide evenly, the leftover bottom-band teams are extra pul
 handed to randomly-chosen people inside the same seeded draw. Draws are
 deterministic per draw ID, so any draw can be reproduced for the doubters.
 
+## Results
+
+Match results pull automatically from ESPN's open World Cup scoreboard feed in
+the browser (keyless, CORS-enabled) — refreshed on load and every 5 minutes.
+No manual result entry. Team eliminations / champion / runner-up are one-click
+updates on the team board.
+
 ## Publishing updates
 
-After editing (draw, results, eliminations) click **Export state.json**, then:
+Click **Publish update** on the admin page. The page saves `state.json`
+straight into this repo folder (File System Access API — you pick the file
+once, it's remembered), and a launchd watcher
+(`~/Library/LaunchAgents/com.cameroncarlin.sweepstake-autopublish.plist`)
+commits and pushes it automatically. GitHub Pages redeploys in about a minute,
+and every update is a public commit, so it's all above board.
+
+Fallback (other browsers/machines): the button downloads `state.json` instead —
+publish it with:
 
 ```sh
-./publish.sh                       # uses ~/Downloads/state.json
-./publish.sh path/to/state.json    # or an explicit path
+./publish.sh ~/Downloads/state.json
 ```
-
-That commits `state.json` and pushes — GitHub Pages redeploys in about a minute,
-and every update is a public commit, so it's all above board.
