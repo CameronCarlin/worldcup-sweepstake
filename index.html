@@ -107,17 +107,6 @@
   .setup-meta { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; margin-top: 14px; font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--muted); }
   .setup-meta strong { color: var(--ink); font-weight: 600; }
   .warn { color: var(--signal); font-weight: 600; }
-  .entry-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-  .echip {
-    font-family: "IBM Plex Mono", monospace; font-size: 12px;
-    border: 1px solid var(--line); padding: 3px 10px; background: var(--panel);
-  }
-  .echip b { background: var(--acid); padding: 0 5px; margin-left: 6px; font-weight: 600; }
-
-  .spare-choice { margin-top: 14px; font-size: 13.5px; color: var(--muted); font-family: "IBM Plex Mono", monospace; }
-  .spare-choice label { margin-right: 18px; cursor: pointer; }
-  .spare-choice input { accent-color: var(--ink); margin-right: 6px; }
-
   #results-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
   #results-bar .seed-tag { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); margin-right: auto; }
   #results-bar .seed-tag code { background: var(--ink); color: var(--acid); padding: 3px 10px; font-weight: 600; }
@@ -142,8 +131,6 @@
   .badge.pot1 { background: var(--acid); color: var(--ink); }
   .badge.bonus { background: var(--ink); color: var(--acid); }
   .badge.spoon { background: var(--signal); color: #fff; }
-
-  .spares-note { margin-top: 16px; font-size: 13.5px; color: var(--muted); font-family: "IBM Plex Mono", monospace; }
 
   /* ---- prizes ---- */
   .prize-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 0; border: 1px solid var(--line); background: var(--line); grid-gap: 1px; }
@@ -265,17 +252,11 @@
   <section id="sec-entries" class="admin-only">
     <div class="sec-head">
       <span class="idx">01</span><h2>Entries</h2>
-      <span class="note">One line per £5 entry — list a name once per entry they've bought.</span>
+      <span class="note">One name per line — the draw works out each person's pulls automatically.</span>
     </div>
     <div class="panel">
-      <textarea id="names" placeholder="Tom&#10;Tom&#10;Tom&#10;Tom&#10;Cameron&#10;Cameron&#10;Cameron&#10;Alice&#10;Alice&#10;Alice&#10;…" spellcheck="false"></textarea>
+      <textarea id="names" placeholder="Tom&#10;Cameron&#10;Alice&#10;Bob&#10;Priya&#10;Dan&#10;Maya&#10;Chris&#10;Sam&#10;Jules&#10;Nina&#10;Omar&#10;Lena&#10;Raj" spellcheck="false"></textarea>
       <div class="setup-meta" id="setup-meta"></div>
-      <div class="entry-chips" id="entry-chips"></div>
-      <div class="spare-choice" id="spare-choice" hidden>
-        SPARE TEAMS (lowest-ranked leftovers):
-        <label><input type="radio" name="spares" value="bonus" checked> raffle as free bonus teams</label>
-        <label><input type="radio" name="spares" value="none"> leave unowned</label>
-      </div>
       <div style="margin-top:18px"><button class="btn btn-primary" id="draw-btn">Run the draw</button></div>
     </div>
   </section>
@@ -295,7 +276,6 @@
         <button class="btn btn-ghost admin-only" id="reset-btn">Reset</button>
       </div>
       <div class="player-grid" id="player-grid"></div>
-      <div class="spares-note" id="spares-note" hidden></div>
     </div>
   </section>
 
@@ -336,6 +316,7 @@
     </div>
     <div id="lb-empty" class="empty-dash">// AWAITING DRAW</div>
     <table class="lb-table" id="lb-table" hidden></table>
+    <div style="margin-top:12px"><button class="btn btn-ghost" id="copy-dash-btn" hidden>Copy standings for Slack</button></div>
   </section>
 
   <section id="sec-log">
@@ -370,9 +351,9 @@
     <div class="panel">
       <ol>
         <li>All 48 teams are ordered by the <strong>FIFA World Ranking (April 2026)</strong> — the final ranking before the tournament.</li>
-        <li>Teams are split into <strong>seeded pots</strong>. Pot 1 holds one top team for every player; Pot 2 the next band, and so on. Your 1st entry draws from Pot 1, your 2nd from Pot 2…</li>
-        <li>Every entry is a <strong>random draw within its pot</strong> — completely random, but the favourites are always spread out. Nobody can land both of the top two seeds.</li>
-        <li>Extra entries draw from the <strong>lower pots</strong> — fancying seconds buys the underdogs (and a shot at the Wooden Spoon money 🥄).</li>
+        <li>Teams are split into <strong>seeded pots</strong>: Pot 1 holds one top team for every player, Pot 2 the next band, and so on. Everyone draws <strong>one team from every pot</strong>.</li>
+        <li>Each pull is a <strong>random draw within its pot</strong> — completely random, but the favourites are always spread out. Nobody can land both of the top two seeds.</li>
+        <li>If 48 doesn't split evenly, the leftover teams become <strong>extra pulls from the bottom band</strong> — who gets them is decided inside the same seeded draw, so it's reproducible from the draw ID (and the lucky dippers get a shot at the Wooden Spoon money 🥄).</li>
       </ol>
     </div>
   </section>
@@ -470,19 +451,26 @@ function shuffle(arr, rnd) {
   return arr;
 }
 
-// Weighted tiered draw. Entry counts may differ per person:
-// pot 1 = top teams, one for every player's 1st entry; pot 2 covers every
-// player's 2nd entry; and so on. Within a pot the assignment is random.
-// So equal entry counts mean identical strength profiles, and extra entries
-// always buy teams from the next band down — never a second bite at the top.
-function runDraw(entrants, seed, spareMode) {
+// Tiered draw over a plain list of names. The draw itself works out the
+// pulls: with N people, everyone gets floor(48/N) teams — one from each
+// seeded pot — and the 48 % N leftover teams (the bottom band) are extra
+// pulls handed to randomly-chosen people. All randomness comes from the one
+// seeded RNG, so the whole draw is reproducible from its ID.
+function runDraw(names, seed) {
   const rnd = mulberry32(seed);
   const sorted = [...TEAMS].sort((a, b) => a.rank - b.rank);
-  const players = entrants.map(e => ({ name: e.name, entries: e.entries, teams: [] }));
-  const maxEntries = Math.max(...players.map(p => p.entries));
+  const N = names.length;
+  const base = Math.floor(sorted.length / N);
+  const extra = sorted.length % N;
+
+  const luckyIdx = new Set(shuffle(names.map((_, i) => i), rnd).slice(0, extra));
+  const players = names.map((name, i) => ({
+    name, entries: base + (luckyIdx.has(i) ? 1 : 0), teams: [],
+  }));
+  const potCount = base + (extra ? 1 : 0);
   let idx = 0;
 
-  for (let pot = 1; pot <= maxEntries; pot++) {
+  for (let pot = 1; pot <= potCount; pot++) {
     const eligible = players.map((p, i) => (p.entries >= pot ? i : -1)).filter(i => i >= 0);
     const band = sorted.slice(idx, idx + eligible.length);
     idx += eligible.length;
@@ -490,19 +478,8 @@ function runDraw(entrants, seed, spareMode) {
     band.forEach((team, k) => players[order[k]].teams.push({ ...team, pot }));
   }
 
-  const spares = sorted.slice(idx);
-  const spareOwners = {};
-  if (spareMode === "bonus" && spares.length) {
-    const order = shuffle(players.map((_, i) => i), rnd);
-    spares.forEach((team, i) => {
-      const p = players[order[i % order.length]];
-      p.teams.push({ ...team, pot: "bonus" });
-      spareOwners[team.name] = p.name;
-    });
-  }
-
   players.forEach(pl => pl.teams.sort((a, b) => a.rank - b.rank));
-  return { players, spares, spareOwners, potCount: maxEntries };
+  return { players, potCount, base, extra };
 }
 
 // --- tournament stages / scoring ---
@@ -522,7 +499,7 @@ function woodenSpoonTeam() {
 }
 
 // Compute prize holders + per-player winnings from draw + dashboard state.
-function computeStandings(players, dash, spareMode) {
+function computeStandings(players, dash) {
   const totalEntries = players.reduce((s, p) => s + p.entries, 0);
   const pot = totalEntries * ENTRY_PRICE;
   const prize = Object.fromEntries(PRIZES.map(p => [p.key, pot * p.pct]));
@@ -566,60 +543,55 @@ function computeStandings(players, dash, spareMode) {
 <script>
 // --- UI ----------------------------------------------------------------------
 const $ = id => document.getElementById(id);
-const STORE_KEY = "wc2026-sweepstake-v3";
+const STORE_KEY = "wc2026-sweepstake-v4";
 const isAdminHash = () => /admin/.test(location.hash);
-let state = null;     // { entrants, rosterText, seed, spareMode, dash, updatedAt }
+let state = null;     // { names, rosterText, seed, dash, updatedAt }
 let readOnly = false; // true when serving published state to a non-admin viewer
 
 function freshDash() { return { stages: {}, bootTeam: null, bootPlayer: "", gloveTeam: null, glovePlayer: "", results: [] }; }
 
-// One line per entry — the same name on multiple lines = multiple entries.
-function parseRoster(text) {
-  const map = new Map(); // lowercase key -> { name, entries }
+// One name per line, each person once — the draw works out the pulls.
+function parseNames(text) {
+  const seen = new Set();
+  const names = [];
   text.split("\n").forEach(line => {
     const name = line.trim().replace(/\s+/g, " ");
     if (!name) return;
     const key = name.toLowerCase();
-    if (map.has(key)) map.get(key).entries++;
-    else map.set(key, { name, entries: 1 });
+    if (seen.has(key)) return;
+    seen.add(key);
+    names.push(name);
   });
-  return [...map.values()];
+  return names;
 }
 
 function gbp(x) { return "£" + (Number.isInteger(x) ? x : x.toFixed(2)); }
 
 function updateMeta() {
-  const entrants = parseRoster($("names").value);
+  const names = parseNames($("names").value);
   const meta = $("setup-meta");
-  const chips = $("entry-chips");
-  const N = entrants.length;
-  const total = entrants.reduce((s, e) => s + e.entries, 0);
-  chips.innerHTML = entrants.map(e => `<span class="echip">${esc(e.name)}<b>×${e.entries}</b></span>`).join("");
-  if (N === 0) { meta.innerHTML = ""; $("spare-choice").hidden = true; return; }
+  const N = names.length;
+  if (N === 0) { meta.innerHTML = ""; return; }
   let bad = "";
   if (N < 2) bad = "Need at least 2 people.";
-  if (total > 48) bad = `Only 48 teams — that's ${total - 48} entr${total - 48 === 1 ? "y" : "ies"} too many.`;
-  if (bad) { meta.innerHTML = `<span class="warn">${bad}</span>`; $("spare-choice").hidden = true; return; }
-  const spares = 48 - total;
+  if (N > 48) bad = "Max 48 people — only 48 teams.";
+  if (bad) { meta.innerHTML = `<span class="warn">${bad}</span>`; return; }
+  const base = Math.floor(48 / N), extra = 48 % N;
   meta.innerHTML =
     `<span><strong>${N}</strong> PEOPLE</span>` +
-    `<span><strong>${total}</strong>/48 ENTRIES</span>` +
-    `<span>POT <strong>${gbp(total * ENTRY_PRICE)}</strong></span>` +
-    (spares ? `<span><strong>${spares}</strong> SPARE TEAM${spares === 1 ? "" : "S"}</span>`
-            : `<span>FULL SELL-OUT — NO SPARES</span>`);
-  $("spare-choice").hidden = spares === 0;
+    `<span>48 TEAMS → <strong>${base}</strong> PULL${base === 1 ? "" : "S"} EACH` +
+    (extra ? ` + <strong>${extra}</strong> EXTRA PULL${extra === 1 ? "" : "S"} DRAWN AT RANDOM` : "") + `</span>` +
+    `<span>POT <strong>${gbp(48 * ENTRY_PRICE)}</strong></span>`;
 }
 
 function newSeed() { return (crypto.getRandomValues(new Uint32Array(1))[0] % 900000) + 100000; }
-function spareModeSel() { return document.querySelector('input[name="spares"]:checked').value; }
 
 function doDraw(seed) {
-  const entrants = parseRoster($("names").value);
-  const total = entrants.reduce((s, e) => s + e.entries, 0);
-  if (entrants.length < 2 || total > 48) { updateMeta(); return; }
+  const names = parseNames($("names").value);
+  if (names.length < 2 || names.length > 48) { updateMeta(); return; }
   state = {
-    entrants, rosterText: $("names").value,
-    seed: seed ?? newSeed(), spareMode: spareModeSel(),
+    names, rosterText: $("names").value,
+    seed: seed ?? newSeed(),
     dash: freshDash(),
   };
   save();
@@ -632,7 +604,7 @@ function save() {
   state.updatedAt = Date.now();
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
 }
-function drawResult() { return runDraw(state.entrants, state.seed, state.spareMode); }
+function drawResult() { return runDraw(state.names, state.seed); }
 
 // ---------- rendering ----------
 function renderAll() {
@@ -643,12 +615,13 @@ function renderAll() {
   $("dash-body").hidden = !has;
   $("lb-empty").hidden = has;
   $("lb-table").hidden = !has;
+  $("copy-dash-btn").hidden = !has;
   $("board-empty").hidden = has;
   $("group-grid").hidden = !has;
   if (!has) { renderTeamsTable(null); renderLog(); $("band-pot").innerHTML = ""; return; }
 
-  const { players, spares } = drawResult();
-  const st = computeStandings(players, state.dash, state.spareMode);
+  const { players, base } = drawResult();
+  const st = computeStandings(players, state.dash);
   const spoon = woodenSpoonTeam();
 
   $("band-pot").innerHTML = `POT <b>${gbp(st.pot)}</b>`;
@@ -658,24 +631,18 @@ function renderAll() {
   $("player-grid").innerHTML = players.map(pl => {
     const avg = (pl.teams.reduce((s, t) => s + t.rank, 0) / pl.teams.length).toFixed(1);
     return `<div class="player-card">
-      <div class="pc-head"><h3>${esc(pl.name)}</h3><span class="stat">${pl.entries} × £5 · AVG RANK ${avg}</span></div>` +
+      <div class="pc-head"><h3>${esc(pl.name)}</h3><span class="stat">${pl.entries} PULL${pl.entries === 1 ? "" : "S"} · ${gbp(pl.entries * ENTRY_PRICE)} · AVG RANK ${avg}</span></div>` +
       pl.teams.map(t => `
         <div class="team-row">
           <span class="flag">${t.flag}</span>
           <span class="tname">${esc(t.name)}</span>
           <span class="tmeta">FIFA #${t.rank} · GRP ${t.group}</span>
           ${t.pot === 1 ? '<span class="badge pot1">POT 1</span>' : ""}
-          ${t.pot === "bonus" ? '<span class="badge bonus">BONUS</span>' : ""}
+          ${t.pot > base ? '<span class="badge bonus">EXTRA PULL</span>' : ""}
           ${t.name === spoon.name ? '<span class="badge spoon">🥄 SPOON</span>' : ""}
         </div>`).join("") +
     `</div>`;
   }).join("");
-
-  const note = $("spares-note");
-  if (spares.length && state.spareMode === "none") {
-    note.hidden = false;
-    note.innerHTML = "⚠ UNOWNED SPARES: " + spares.map(t => `${t.flag} ${esc(t.name)}`).join(", ") + " — house rules if one wins a prize.";
-  } else note.hidden = true;
 
   // prize strip
   $("prize-strip").innerHTML =
@@ -758,13 +725,13 @@ function renderTeamsTable(players) {
     `<tr><th>Seed</th><th>Team</th><th>FIFA rank</th><th>Group</th><th>Pot</th><th>Owner</th></tr>` +
     sorted.map((t, i) => {
       const own = owner[t.name];
-      const pot = players ? (potOf[t.name] ?? "spare") : "—";
+      const pot = players ? potOf[t.name] : "—";
       return `<tr>
         <td class="pos">${String(i + 1).padStart(2, "0")}</td>
         <td>${t.flag} ${esc(t.name)}</td>
         <td>#${t.rank}</td>
         <td>${t.group}</td>
-        <td>${pot === "bonus" ? "bonus" : pot}</td>
+        <td>${pot}</td>
         <td class="owner ${own ? "" : "none"}">${own ? esc(own) : (players ? "unowned" : "run the draw")}</td>
       </tr>`;
     }).join("");
@@ -790,17 +757,33 @@ function renderLog() {
 
 // ---------- copy / export ----------
 function copyDraw() {
-  const { players, spares } = drawResult();
-  const total = players.reduce((s, p) => s + p.entries, 0);
+  const { players, base } = drawResult();
   let txt = `⚽ StackOne World Cup 2026 Sweepstakes — THE DRAW (ID ${state.seed})\n`;
-  txt += `${players.length} people · ${total}/48 entries · pot ${gbp(total * ENTRY_PRICE)}\n\n`;
+  txt += `${players.length} people · 48 teams · pot ${gbp(48 * ENTRY_PRICE)}\n\n`;
   players.forEach(pl => {
-    txt += `*${pl.name}* (${pl.entries} entr${pl.entries === 1 ? "y" : "ies"}):\n` +
-      pl.teams.map(t => `  ${t.flag} ${t.name} (FIFA #${t.rank}, Grp ${t.group})${t.pot === "bonus" ? " — bonus" : ""}`).join("\n") + "\n\n";
+    txt += `*${pl.name}* (${pl.entries} pull${pl.entries === 1 ? "" : "s"} · ${gbp(pl.entries * ENTRY_PRICE)}):\n` +
+      pl.teams.map(t => `  ${t.flag} ${t.name} (FIFA #${t.rank}, Grp ${t.group})${t.pot > base ? " — extra pull" : ""}`).join("\n") + "\n\n";
   });
-  if (spares.length && state.spareMode === "none")
-    txt += "Unowned spares: " + spares.map(t => `${t.flag} ${t.name}`).join(", ") + "\n";
   navigator.clipboard.writeText(txt).then(() => toast("DRAW COPIED — PASTE IT IN THE CHANNEL"));
+}
+
+function copyDash() {
+  const { players } = drawResult();
+  const st = computeStandings(players, state.dash);
+  const d = new Date();
+  let txt = `⚽ StackOne WC2026 Sweepstakes — standings ${d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}\n`;
+  txt += `💰 Pot ${gbp(st.pot)}\n\n`;
+  PRIZES.forEach(pz => {
+    const h = st.holders[pz.key];
+    txt += `${pz.ico} ${pz.label} (${gbp(st.prize[pz.key])}): ` +
+      (h && h.owner ? `${h.team.flag} ${h.team.name} — ${h.owner}${pz.key === "boot" && state.dash.bootPlayer ? ` (${state.dash.bootPlayer})` : ""}${pz.key === "glove" && state.dash.glovePlayer ? ` (${state.dash.glovePlayer})` : ""}`
+        : h ? `${h.team.flag} ${h.team.name} — unowned` : "TBD") + "\n";
+  });
+  txt += `\n📋 Leaderboard:\n`;
+  st.rows.forEach((r, i) => {
+    txt += `${i + 1}. ${r.name} — ${r.alive}/${r.total} teams in — ${gbp(r.winnings)}${r.wins.map(w => " " + w.ico).join("")}\n`;
+  });
+  navigator.clipboard.writeText(txt).then(() => toast("STANDINGS COPIED — POST THE CHAOS"));
 }
 
 function exportState() {
@@ -835,6 +818,7 @@ $("rerun-btn").addEventListener("click", () => {
   if (confirm("Re-draw with a new random draw ID? Assignments change and the dashboard resets.")) doDraw();
 });
 $("copy-btn").addEventListener("click", copyDraw);
+$("copy-dash-btn").addEventListener("click", copyDash);
 $("export-btn").addEventListener("click", exportState);
 $("reset-btn").addEventListener("click", () => {
   if (!confirm("Clear everything and start over?")) return;
@@ -897,7 +881,7 @@ $("log-list").addEventListener("click", e => {
     const r = await fetch("state.json", { cache: "no-store" });
     if (r.ok) {
       const j = await r.json();
-      if (j && Array.isArray(j.entrants) && j.seed) published = j;
+      if (j && Array.isArray(j.names) && j.seed) published = j;
     }
   } catch (e) { /* file:// or no state.json — local mode */ }
 
@@ -923,9 +907,7 @@ $("log-list").addEventListener("click", e => {
   if (state) {
     if (!state.dash) state.dash = freshDash();
     if (!state.dash.results) state.dash.results = [];
-    $("names").value = state.rosterText || "";
-    const radio = document.querySelector(`input[name="spares"][value="${state.spareMode}"]`);
-    if (radio) radio.checked = true;
+    $("names").value = state.rosterText || (state.names || []).join("\n");
     updateMeta();
   }
   renderAll();

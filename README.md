@@ -13,12 +13,13 @@ Hosted free on GitHub Pages — no backend, no build step.
 
 ## The draw
 
-Teams are ordered by the FIFA World Ranking (April 2026, the final pre-tournament
-release) and split into seeded pots: Pot 1 holds one top team per player, Pot 2 the
-next band, and so on. Each entry draws randomly **within** its pot, so equal entry
-counts get identical strength profiles and nobody can land both top seeds. Extra
-entries draw from the lower pots. Draws are deterministic per draw ID, so any draw
-can be reproduced for the doubters.
+Enter each person's name once — the draw works out the pulls. Teams are ordered by
+the FIFA World Ranking (April 2026, the final pre-tournament release) and split into
+seeded pots: Pot 1 holds one top team per player, Pot 2 the next band, and so on.
+Everyone draws one team randomly **within** each pot, so nobody can land both top
+seeds. If 48 doesn't divide evenly, the leftover bottom-band teams are extra pulls
+handed to randomly-chosen people inside the same seeded draw. Draws are
+deterministic per draw ID, so any draw can be reproduced for the doubters.
 
 ## Publishing updates
 
