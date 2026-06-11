@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StackOne WC26 — Office TV</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📺</text></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  :root {
+    --ink: #0c0c0a;
+    --panel: #141411;
+    --line: #2a2a24;
+    --acid: #c8ff00;
+    --signal: #ff3b00;
+    --paper: #f4f4f0;
+    --muted: #8a8a80;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: "Archivo", sans-serif;
+    background: var(--ink); color: var(--paper);
+    display: flex; flex-direction: column;
+    cursor: none;
+  }
+  .mono { font-family: "IBM Plex Mono", monospace; }
+
+  header {
+    height: 8vh; flex: none;
+    display: flex; align-items: center; gap: 3vw;
+    padding: 0 2.5vw; border-bottom: 2px solid var(--acid);
+  }
+  header .brand { font-family: "IBM Plex Mono", monospace; font-size: 1.7vh; letter-spacing: .3vh; color: var(--muted); text-transform: uppercase; }
+  header .brand b { color: var(--acid); font-weight: 600; }
+  header .pot { font-weight: 900; font-size: 2.6vh; letter-spacing: .05vh; text-transform: uppercase; }
+  header .pot b { color: var(--acid); }
+  header .clock { margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 2.4vh; font-weight: 600; color: var(--acid); }
+
+  main { position: relative; flex: 1; }
+  .slide {
+    position: absolute; inset: 0; padding: 2.2vh 2.5vw;
+    opacity: 0; transition: opacity .8s ease; pointer-events: none;
+    display: flex; flex-direction: column;
+  }
+  .slide.active { opacity: 1; }
+  .slide h2 {
+    font-size: 3.6vh; font-weight: 900; text-transform: uppercase; letter-spacing: .1vh;
+    margin-bottom: 1.6vh; flex: none;
+  }
+  .slide h2 .acid { color: var(--acid); }
+  .slide .body { flex: 1; min-height: 0; }
+
+  footer {
+    height: 5vh; flex: none;
+    display: flex; align-items: center; gap: 2vw;
+    padding: 0 2.5vw; border-top: 1px solid var(--line);
+    font-family: "IBM Plex Mono", monospace; font-size: 1.6vh; letter-spacing: .2vh;
+    color: var(--muted); text-transform: uppercase;
+  }
+  .dots { margin-left: auto; display: flex; gap: .8vw; }
+  .dot { width: 1.2vh; height: 1.2vh; background: var(--line); }
+  .dot.on { background: var(--acid); }
+
+  /* standings */
+  table.lb { width: 100%; height: 100%; border-collapse: collapse; }
+  .lb th { text-align: left; font-family: "IBM Plex Mono", monospace; font-size: 1.5vh; letter-spacing: .2vh; color: var(--muted); text-transform: uppercase; padding: 0 1vw .8vh 0; border-bottom: 2px solid var(--paper); }
+  .lb td { padding: 0 1vw 0 0; border-bottom: 1px solid var(--line); font-size: 2.1vh; vertical-align: middle; }
+  .lb .pos { font-family: "IBM Plex Mono", monospace; color: var(--muted); font-size: 1.7vh; width: 3vw; }
+  .lb .pname { font-weight: 900; text-transform: uppercase; font-size: 2.3vh; white-space: nowrap; }
+  .lb .num { font-family: "IBM Plex Mono", monospace; font-size: 1.9vh; white-space: nowrap; }
+  .lb .money { font-weight: 900; font-size: 2.2vh; white-space: nowrap; }
+  .lb .money.nonzero { color: var(--ink); background: var(--acid); padding: .1vh .6vw; }
+  .lb .money.zero { color: var(--muted); font-weight: 600; }
+  .lb .squad { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 38vw; }
+  .lb .tchip { font-size: 1.9vh; margin-right: 1.2vw; white-space: nowrap; }
+  .lb .tchip.dead { opacity: .35; text-decoration: line-through; }
+  .lb .tchip.champ { color: var(--acid); }
+
+  /* prizes */
+  .prize-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: 1fr 1fr; gap: 1.6vh; height: 100%; }
+  .pcard { background: var(--panel); border: 1px solid var(--line); padding: 2.4vh 1.6vw; display: flex; flex-direction: column; }
+  .pcard .ico { font-size: 4.6vh; }
+  .pcard .lbl { font-family: "IBM Plex Mono", monospace; font-size: 1.6vh; letter-spacing: .25vh; color: var(--muted); text-transform: uppercase; margin-top: 1.2vh; }
+  .pcard .amt { font-size: 5.4vh; font-weight: 900; margin-top: .4vh; }
+  .pcard .who { margin-top: auto; font-size: 2.2vh; font-weight: 700; line-height: 1.35; }
+  .pcard .who small { display: block; font-family: "IBM Plex Mono", monospace; font-size: 1.5vh; color: var(--muted); font-weight: 400; margin-top: .4vh; text-transform: uppercase; }
+  .pcard.pot { background: var(--acid); color: var(--ink); }
+  .pcard.pot .lbl, .pcard.pot .who small { color: rgba(12,12,10,.6); }
+  .pcard.won { border-color: var(--acid); box-shadow: inset 0 0 0 1px var(--acid); }
+  .pcard .who .own { color: var(--acid); }
+  .pcard.pot .who .own { color: var(--ink); }
+
+  /* results + fixtures */
+  .res-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5vw; height: 100%; }
+  .res-col h3 { font-family: "IBM Plex Mono", monospace; font-size: 1.7vh; letter-spacing: .25vh; color: var(--muted); text-transform: uppercase; padding-bottom: 1vh; border-bottom: 2px solid var(--paper); }
+  .mrow { display: flex; align-items: baseline; gap: 1vw; padding: 1.15vh 0; border-bottom: 1px solid var(--line); font-size: 2.1vh; }
+  .mrow .when { font-family: "IBM Plex Mono", monospace; font-size: 1.5vh; color: var(--muted); width: 7vw; flex: none; }
+  .mrow .fix { flex: 1; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mrow .fix b { color: var(--acid); font-weight: 900; }
+  .mrow .tag { font-family: "IBM Plex Mono", monospace; font-size: 1.4vh; color: var(--muted); text-transform: uppercase; }
+  .mrow .tag.live { background: var(--signal); color: #fff; padding: .2vh .5vw; font-weight: 600; animation: blink 1.6s infinite; }
+  @keyframes blink { 50% { opacity: .55; } }
+  .res-empty { padding: 2vh 0; font-family: "IBM Plex Mono", monospace; font-size: 1.8vh; color: var(--muted); }
+
+  /* wall chart */
+  .chart { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr); gap: 1.2vh; height: 100%; }
+  .gbox { background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; }
+  .gbox h4 { font-family: "IBM Plex Mono", monospace; font-size: 1.4vh; letter-spacing: .3vh; background: var(--paper); color: var(--ink); padding: .5vh 1vw; text-transform: uppercase; flex: none; }
+  .gteam { display: flex; align-items: center; gap: .6vw; padding: 0 1vw; flex: 1; min-height: 0; border-top: 1px solid var(--line); font-size: 1.8vh; }
+  .gteam:first-of-type { border-top: none; }
+  .gteam .nm { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gteam .own { margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 1.4vh; color: var(--muted); white-space: nowrap; }
+  .gteam.dead { opacity: .35; }
+  .gteam.dead .nm { text-decoration: line-through; }
+  .gteam.champ { background: var(--acid); color: var(--ink); }
+  .gteam.champ .own { color: var(--ink); }
+
+  .splash {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3vh; background: var(--ink);
+  }
+  .splash h1 { font-size: 7vh; font-weight: 900; text-transform: uppercase; color: var(--acid); }
+  .splash p { font-family: "IBM Plex Mono", monospace; font-size: 2vh; color: var(--muted); letter-spacing: .3vh; text-transform: uppercase; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">STACKONE_WC26 // <b>SWEEPSTAKES</b> // OFFICE_FEED</span>
+  <span class="pot" id="tv-pot"></span>
+  <span class="clock" id="tv-clock"></span>
+</header>
+
+<main>
+  <section class="slide" data-title="Leaderboard">
+    <h2>The <span class="acid">Leaderboard</span></h2>
+    <div class="body" id="b-standings"></div>
+  </section>
+  <section class="slide" data-title="Prize money">
+    <h2>The <span class="acid">Money</span></h2>
+    <div class="body" id="b-prizes"></div>
+  </section>
+  <section class="slide" data-title="Results & fixtures">
+    <h2>Results &amp; <span class="acid">Fixtures</span></h2>
+    <div class="body" id="b-results"></div>
+  </section>
+  <section class="slide" data-title="Wall chart">
+    <h2>The <span class="acid">Wall Chart</span></h2>
+    <div class="body" id="b-chart"></div>
+  </section>
+  <div class="splash" id="splash" hidden>
+    <h1>World Cup 2026</h1>
+    <p>// Awaiting the draw — back soon</p>
+  </div>
+</main>
+
+<footer>
+  <span id="f-title"></span>
+  <span id="f-updated"></span>
+  <div class="dots" id="dots"></div>
+</footer>
+
+<script src="logic.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let state = null, matches = null;
+
+const slides = [...document.querySelectorAll(".slide")];
+const pinParam = new URLSearchParams(location.search).get("slide");
+const pinned = pinParam != null ? Math.max(0, Math.min(slides.length - 1, parseInt(pinParam, 10) || 0)) : null;
+let cur = pinned ?? 0;
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function loadState() {
+  try {
+    const r = await fetch("state.json", { cache: "no-store" });
+    if (r.ok) {
+      const j = await r.json();
+      if (j && Array.isArray(j.names) && j.seed) state = j;
+    }
+  } catch (e) {}
+}
+async function loadMatches() {
+  try {
+    const r = await fetch(RESULTS_API);
+    matches = mapScoreboardEvents(await r.json());
+    $("f-updated").textContent = "UPDATED " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  } catch (e) {}
+}
+
+function render() {
+  const has = !!state;
+  $("splash").hidden = has;
+  if (!has) return;
+  const dash = state.dash || { stages: {} };
+  const { players } = runDraw(state.names, state.seed);
+  const awards = resolveAwardsFrom(dash, matches);
+  const st = computeStandings(players, dash, awards);
+  $("tv-pot").innerHTML = `POT <b>£${st.pot}</b> · ${players.length} PLAYERS · 48 TEAMS`;
+  renderStandings(st);
+  renderPrizes(st, awards, players.length);
+  renderResults();
+  renderChart(st);
+}
+
+function renderStandings(st) {
+  $("b-standings").innerHTML = `<table class="lb">
+    <tr><th></th><th>Player</th><th>Teams in</th><th>Best run</th><th>Winnings</th><th>Squad</th></tr>` +
+    st.rows.map((r, i) => `
+      <tr>
+        <td class="pos">${String(i + 1).padStart(2, "0")}</td>
+        <td class="pname">${esc(r.name)}${r.wins.map(w => " " + w.ico).join("")}</td>
+        <td class="num">${r.alive}/${r.total}</td>
+        <td class="num">${r.best.label}</td>
+        <td><span class="money ${r.winnings ? "nonzero" : "zero"}">£${Number.isInteger(r.winnings) ? r.winnings : r.winnings.toFixed(2)}</span></td>
+        <td class="squad">${r.teams.map(t => {
+          const s = st.stageOf(t.name);
+          const cls = s.stage === "WIN" ? "champ" : (s.out ? "dead" : "");
+          return `<span class="tchip ${cls}">${t.flag} ${esc(t.name)}</span>`;
+        }).join("")}</td>
+      </tr>`).join("") + `</table>`;
+}
+
+function renderPrizes(st, awards, nPlayers) {
+  const money = x => "£" + (Number.isInteger(x) ? x : x.toFixed(2));
+  $("b-prizes").innerHTML =
+    `<div class="prize-grid">
+      <div class="pcard pot"><div class="ico">💰</div><div class="lbl">The Pot</div><div class="amt">${money(st.pot)}</div>
+        <div class="who">${nPlayers} × £5<small>SAFE IN TOM'S MONZO. WE CAN TRUST HIM.</small></div></div>` +
+    PRIZES.map(pz => {
+      const h = st.holders[pz.key];
+      const locked =
+        (pz.key === "winner" || pz.key === "runner") ? !!h :
+        pz.key === "spoon" ? !!(awards.spoon && awards.spoon.complete) :
+        !!(awards[pz.key] && awards[pz.key].override);
+      const sub =
+        pz.key === "boot" && awards.boot && awards.boot.player ? `${awards.boot.player} — ${awards.boot.goals} GOAL${awards.boot.goals === 1 ? "" : "S"}` :
+        pz.key === "glove" && awards.glove && awards.glove.cs != null ? `${awards.glove.cs} CLEAN SHEET${awards.glove.cs === 1 ? "" : "S"}` :
+        pz.key === "spoon" && awards.spoon && awards.spoon.row ? `${awards.spoon.row.pts} PTS · GD ${awards.spoon.row.gd >= 0 ? "+" : ""}${awards.spoon.row.gd}` : "";
+      const who = h
+        ? `${h.team.flag} ${esc(h.team.name)} → <span class="own">${h.owner ? esc(h.owner) : "unowned"}</span>${locked ? "" : " <small style='display:inline'>(CURRENT)</small>"}<small>${esc(sub)}</small>`
+        : `<span style="color:var(--muted)">${pz.key === "winner" || pz.key === "runner" ? "TO BE DECIDED" : pz.key === "spoon" ? "DECIDED AFTER THE GROUPS" : "AWAITING FIRST RESULTS"}</span>`;
+      return `<div class="pcard ${h && locked ? "won" : ""}">
+        <div class="ico">${pz.ico}</div>
+        <div class="lbl">${pz.label} · ${pz.pct * 100}%</div>
+        <div class="amt">${money(st.prize[pz.key])}</div>
+        <div class="who">${who}</div>
+      </div>`;
+    }).join("") + `</div>`;
+}
+
+function renderResults() {
+  const fmtD = d => new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }).toUpperCase();
+  const fmtT = d => new Date(d).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const all = matches || [];
+  const played = all.filter(m => m.state !== "pre").sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
+  const upcoming = all.filter(m => m.state === "pre").sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 10);
+  const row = m => {
+    const live = m.state === "in";
+    return `<div class="mrow">
+      <span class="when">${fmtD(m.date)}</span>
+      <span class="fix">${esc(m.home)} <b>${m.hs ?? ""} : ${m.as ?? ""}</b> ${esc(m.away)}</span>
+      <span class="tag ${live ? "live" : ""}">${live ? "LIVE " + esc(m.detail) : esc(m.round).toUpperCase()}</span>
+    </div>`;
+  };
+  const fixRow = m => `<div class="mrow">
+      <span class="when">${fmtD(m.date)} ${fmtT(m.date)}</span>
+      <span class="fix">${esc(m.home)} v ${esc(m.away)}</span>
+    </div>`;
+  $("b-results").innerHTML = `<div class="res-cols">
+    <div class="res-col"><h3>Latest</h3>${played.length ? played.map(row).join("") : `<div class="res-empty">// NO RESULTS YET — KICKOFF SOON</div>`}</div>
+    <div class="res-col"><h3>Coming up</h3>${upcoming.length ? upcoming.map(fixRow).join("") : `<div class="res-empty">// NO FIXTURES LEFT</div>`}</div>
+  </div>`;
+}
+
+function renderChart(st) {
+  const groups = [...new Set(TEAMS.map(t => t.group))].sort();
+  $("b-chart").innerHTML = `<div class="chart">` + groups.map(g => {
+    const teams = TEAMS.filter(t => t.group === g).sort((a, b) => a.rank - b.rank);
+    return `<div class="gbox"><h4>Group ${g}</h4>` + teams.map(t => {
+      const s = st.stageOf(t.name);
+      return `<div class="gteam ${s.out ? "dead" : ""} ${s.stage === "WIN" ? "champ" : ""}">
+        <span>${t.flag}</span><span class="nm">${esc(t.name)}</span>
+        <span class="own">${st.ownerOf[t.name] ? esc(st.ownerOf[t.name]) : "—"}</span>
+      </div>`;
+    }).join("") + `</div>`;
+  }).join("") + `</div>`;
+}
+
+// rotation
+function show(i) {
+  cur = i;
+  slides.forEach((s, k) => s.classList.toggle("active", k === i));
+  $("f-title").textContent = `${String(i + 1).padStart(2, "0")} / ${slides[i].dataset.title.toUpperCase()}`;
+  $("dots").innerHTML = slides.map((_, k) => `<span class="dot ${k === i ? "on" : ""}"></span>`).join("");
+}
+
+setInterval(() => {
+  $("tv-clock").textContent = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}, 1000);
+
+(async function init() {
+  await Promise.all([loadState(), loadMatches()]);
+  render();
+  show(cur);
+  if (pinned === null) setInterval(() => show((cur + 1) % slides.length), 14000);
+  setInterval(async () => { await loadMatches(); render(); }, 5 * 60 * 1000);
+  setInterval(async () => { await loadState(); render(); }, 3 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
