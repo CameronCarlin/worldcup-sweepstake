@@ -1,0 +1,30 @@
+{
+  "names": [
+    "Tom",
+    "Cameron",
+    "Will",
+    "Bryce",
+    "Charlie",
+    "Guillaume",
+    "Gordon",
+    "Yasmin",
+    "Max",
+    "Romain",
+    "Elena",
+    "Alex",
+    "Omar",
+    "Andres",
+    "Joe",
+    "Hisku"
+  ],
+  "rosterText": "Tom\nCameron\nWill\nBryce\nCharlie\nGuillaume\nGordon\nYasmin\nMax\nRomain\nElena\nAlex\nOmar\nAndres\nJoe\nHisku",
+  "seed": 589759,
+  "dash": {
+    "stages": {},
+    "bootTeam": null,
+    "bootPlayer": "",
+    "gloveTeam": null,
+    "glovePlayer": ""
+  },
+  "updatedAt": 1781105777931
+}
