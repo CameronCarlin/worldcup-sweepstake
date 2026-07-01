@@ -631,17 +631,20 @@ function renderAll() {
       pl.teams.map(t => {
         const s = st.stageOf(t.name);
         const short = STAGES[STAGE_ORDER[s.stage]].short;
+        const inGroup = s.stage === "GROUP" && !s.out; // hasn't reached the knockouts yet
+        // Group stage: FIFA rank/group + pot badges. Knockouts: just the fate
+        // stamp, so the name keeps its room instead of fighting the meta.
         const badge =
           s.stage === "WIN" ? '<span class="badge champ">🏆 CHAMP</span>' :
           s.stage === "RU"  ? '<span class="badge runner">🥈 RUNNER-UP</span>' :
           s.out             ? `<span class="badge out">OUT · ${short}</span>` :
-          s.stage !== "GROUP" ? `<span class="badge live">${short}</span>` :
+          !inGroup          ? `<span class="badge live">${short}</span>` :
           (t.pot === 1 ? '<span class="badge pot1">POT 1</span>' : "") +
           (t.pot > base ? '<span class="badge bonus">EXTRA PULL</span>' : "");
         return `<div class="team-row ${s.stage === "WIN" ? "champ" : s.out ? "dead" : ""}">
           <span class="flag">${t.flag}</span>
           <span class="tname">${esc(t.name)}</span>
-          <span class="tmeta">FIFA #${t.rank} · GRP ${t.group}</span>
+          ${inGroup ? `<span class="tmeta">FIFA #${t.rank} · GRP ${t.group}</span>` : ""}
           ${badge}
         </div>`;
       }).join("") +
