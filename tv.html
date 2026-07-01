@@ -77,6 +77,14 @@
   .lb .tchip { font-size: 1.9vh; margin-right: 1.2vw; white-space: nowrap; }
   .lb .tchip.dead { opacity: .35; text-decoration: line-through; }
   .lb .tchip.champ { color: var(--acid); }
+  /* every team gone — dim the row; the red FADED tag stays vivid */
+  .lb tr.faded .pname { color: var(--muted); text-decoration: line-through; }
+  .lb tr.faded .num { color: var(--muted); }
+  .lb .faded-tag {
+    display: inline-block; font-family: "IBM Plex Mono", monospace; font-weight: 700;
+    font-size: 1.4vh; letter-spacing: .2vh; text-transform: uppercase; text-decoration: none;
+    color: #fff; background: var(--signal); padding: .15vh .7vw; margin-left: .9vw; vertical-align: middle;
+  }
 
   /* prizes */
   .prize-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: 1fr 1fr; gap: 1.6vh; height: 100%; }
@@ -246,9 +254,9 @@ function renderStandings(st) {
   $("b-standings").innerHTML = `<table class="lb">
     <tr><th></th><th>Player</th><th>Teams in</th><th>Best run</th><th>Winnings</th><th>Squad</th></tr>` +
     st.rows.map((r, i) => `
-      <tr>
+      <tr class="${r.alive === 0 ? "faded" : ""}">
         <td class="pos">${String(i + 1).padStart(2, "0")}</td>
-        <td class="pname">${esc(r.name)}${r.wins.map(w => " " + w.ico).join("")}</td>
+        <td class="pname">${esc(r.name)}${r.wins.map(w => " " + w.ico).join("")}${r.alive === 0 ? `<span class="faded-tag">Faded</span>` : ""}</td>
         <td class="num">${r.alive}/${r.total}</td>
         <td class="num">${r.best.label}</td>
         <td><span class="money ${r.winnings ? "nonzero" : "zero"}">£${Number.isInteger(r.winnings) ? r.winnings : r.winnings.toFixed(2)}</span></td>
