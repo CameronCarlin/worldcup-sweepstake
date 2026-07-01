@@ -118,9 +118,10 @@
   @media (max-width: 560px) { .player-grid { grid-template-columns: 1fr; } }
   .player-card { background: var(--panel); border: 1px solid var(--line); padding: 0; }
   .player-card .pc-head {
-    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
-    padding: 12px 16px; border-bottom: 1px solid var(--line);
+    display: flex; justify-content: space-between; align-items: baseline; gap: 4px 8px;
+    flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line);
   }
+  .player-card .stat b { color: var(--ink); font-weight: 600; }
   .player-card h3 { font-size: 16px; font-weight: 900; text-transform: uppercase; letter-spacing: .3px; }
   .player-card .stat { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--muted); white-space: nowrap; }
   .team-row { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-top: 1px solid var(--hairline); }
@@ -134,6 +135,15 @@
   }
   .badge.pot1 { background: var(--acid); color: var(--ink); }
   .badge.bonus { background: var(--ink); color: var(--acid); }
+  .badge.out { background: var(--signal); color: #fff; }
+  .badge.live { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .badge.champ { background: var(--ink); color: var(--acid); }
+  .badge.runner { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .team-row.dead { background: #faf0ec; }
+  .team-row.dead .flag { filter: grayscale(1); opacity: .55; }
+  .team-row.dead .tname { color: var(--muted); text-decoration: line-through; }
+  .team-row.dead .tmeta { color: var(--muted); }
+  .team-row.champ { background: var(--acid); }
 
   /* ---- prizes ---- */
   .prize-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 0; border: 1px solid var(--line); background: var(--line); grid-gap: 1px; }
@@ -206,6 +216,46 @@
   .tteam.dead .nm { color: var(--muted); text-decoration: line-through; }
   .tteam.dead .outbtn { border-color: var(--signal); color: var(--signal); }
   .tteam.champ { background: var(--acid); }
+  .tteam.ovr-on { box-shadow: inset 3px 0 0 var(--signal); }
+  .board-ctl { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .board-ctl .mono { font-size: 11px; color: var(--muted); margin-right: auto; }
+  .board-ctl .ovr-key { display: inline-block; width: 8px; height: 12px; background: var(--signal); vertical-align: -2px; }
+
+  /* ---- knockout bracket ---- */
+  .ko-scroll { overflow-x: auto; padding-bottom: 6px; }
+  .ko-bracket {
+    display: grid; grid-template-columns: repeat(5, minmax(158px, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line); min-width: 800px;
+  }
+  .ko-col { background: var(--panel); display: flex; flex-direction: column; }
+  .ko-col > h4 {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 6px;
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px; font-weight: 600;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    background: var(--ink); color: var(--paper); padding: 7px 11px;
+  }
+  .ko-col > h4 .n { color: var(--acid); font-size: 10px; }
+  .ko-team { display: flex; align-items: center; gap: 7px; padding: 7px 11px; border-top: 1px solid var(--hairline); font-size: 12.5px; }
+  .ko-team:first-of-type { border-top: none; }
+  .ko-team .flag { font-size: 15px; line-height: 1; }
+  .ko-team .nm { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ko-team .ow { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; color: var(--muted); max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ko-team.dead { background: #faf0ec; }
+  .ko-team.dead .nm { color: var(--muted); text-decoration: line-through; }
+  .ko-team.champ { background: var(--acid); }
+  .ko-team.champ .ow { color: var(--ink); }
+  .ko-team.runner { background: #eef1de; }
+  .ko-empty { padding: 10px 11px; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--muted); }
+
+  .ko-sub { font-size: 14px; font-weight: 900; text-transform: uppercase; letter-spacing: .3px; margin: 26px 0 6px; }
+  .elim-group { border-top: 1px solid var(--hairline); padding: 12px 0; }
+  .elim-group:first-child { border-top: none; }
+  .elim-group .rd { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .elim-group .rd b { color: var(--signal); }
+  .elim-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .elim-chip { display: inline-flex; align-items: baseline; gap: 6px; font-family: "IBM Plex Mono", monospace; font-size: 11px; padding: 3px 9px; border: 1px solid var(--hairline); background: var(--panel); color: var(--muted); white-space: nowrap; }
+  .elim-chip .tn { text-decoration: line-through; }
+  .elim-chip .ow { color: var(--ink); font-weight: 600; }
 
   .how ol { margin-left: 22px; line-height: 1.9; color: #3c3c38; font-size: 14.5px; }
   .how strong { font-weight: 700; }
@@ -388,9 +438,22 @@
     <div style="margin-top:12px"><button class="btn btn-ghost" id="copy-dash-btn" hidden>Copy standings for Slack</button></div>
   </section>
 
+  <section id="sec-knockout">
+    <div class="sec-head">
+      <span class="idx">05</span><h2>The Knockouts</h2>
+      <span class="note" id="ko-note">Who's still standing — and who's gone home.</span>
+    </div>
+    <div id="ko-empty" class="empty-dash">// KNOCKOUTS BEGIN AFTER THE GROUP STAGE</div>
+    <div id="ko-body" hidden>
+      <div class="ko-scroll" id="ko-scroll"><div class="ko-bracket" id="ko-bracket"></div></div>
+      <h3 class="ko-sub">Out of the tournament</h3>
+      <div id="elim"></div>
+    </div>
+  </section>
+
   <section id="sec-log">
     <div class="sec-head">
-      <span class="idx">05</span><h2>Results Log</h2>
+      <span class="idx">06</span><h2>Results Log</h2>
       <span class="note">Pulled automatically from the live scores feed — every result, on the record.</span>
     </div>
     <div class="log-bar">
@@ -402,10 +465,14 @@
 
   <section id="sec-board">
     <div class="sec-head">
-      <span class="idx">06</span><h2>Team Board</h2>
-      <span class="note">Each team's run. Mark teams out as they fall; set the final two to Champions / Runner-up.</span>
+      <span class="idx">07</span><h2>Team Board</h2>
+      <span class="note">Each team's run — tracked automatically from the live feed. Admins can override any team.</span>
     </div>
     <div id="board-empty" class="empty-dash">// AWAITING DRAW</div>
+    <div class="admin-only board-ctl" id="board-ctl" hidden>
+      <span class="mono">Stages follow the live feed. Edit any team to override — overrides are marked <span class="ovr-key"></span> and always win.</span>
+      <button class="btn btn-ghost" id="clear-ovr-btn">Clear manual overrides</button>
+    </div>
     <div class="group-grid" id="group-grid" hidden></div>
     <details style="margin-top:18px">
       <summary>▸ The 48 teams, seeded — pots &amp; owners</summary>
@@ -415,7 +482,7 @@
 
   <section id="sec-how" class="how">
     <div class="sec-head">
-      <span class="idx">07</span><h2>How the draw is kept fair</h2>
+      <span class="idx">08</span><h2>How the draw is kept fair</h2>
     </div>
     <div class="panel">
       <ol>
@@ -538,28 +605,46 @@ function renderAll() {
   $("copy-dash-btn").hidden = !has;
   $("board-empty").hidden = has;
   $("group-grid").hidden = !has;
-  if (!has) { renderTeamsTable(null); $("band-pot").innerHTML = ""; return; }
+  $("board-ctl").hidden = !has;
+  if (!has) {
+    renderTeamsTable(null);
+    $("band-pot").innerHTML = "";
+    $("ko-empty").hidden = false; $("ko-body").hidden = true;
+    return;
+  }
 
   const { players, base } = drawResult();
   const awards = resolveAwards();
-  const st = computeStandings(players, state.dash, awards);
+  // feed-derived stages with the admin's manual overrides layered on top
+  const eff = effectiveDash(state.dash, latestMatches);
+  const st = computeStandings(players, eff, awards);
 
   $("band-pot").innerHTML = `POT <b>${gbp(st.pot)}</b>`;
   $("seed-display").textContent = state.seed;
 
-  // draw cards
+  // draw cards — each team stamped with its fate as the tournament unfolds
   $("player-grid").innerHTML = players.map(pl => {
     const avg = (pl.teams.reduce((s, t) => s + t.rank, 0) / pl.teams.length).toFixed(1);
+    const alive = pl.teams.filter(t => !st.stageOf(t.name).out).length;
     return `<div class="player-card">
-      <div class="pc-head"><h3>${esc(pl.name)}</h3><span class="stat">${pl.entries} PULL${pl.entries === 1 ? "" : "S"} · AVG RANK ${avg}</span></div>` +
-      pl.teams.map(t => `
-        <div class="team-row">
+      <div class="pc-head"><h3>${esc(pl.name)}</h3><span class="stat">${pl.entries} PULL${pl.entries === 1 ? "" : "S"} · <b>${alive}/${pl.teams.length}</b> IN · AVG ${avg}</span></div>` +
+      pl.teams.map(t => {
+        const s = st.stageOf(t.name);
+        const short = STAGES[STAGE_ORDER[s.stage]].short;
+        const badge =
+          s.stage === "WIN" ? '<span class="badge champ">🏆 CHAMP</span>' :
+          s.stage === "RU"  ? '<span class="badge runner">🥈 RUNNER-UP</span>' :
+          s.out             ? `<span class="badge out">OUT · ${short}</span>` :
+          s.stage !== "GROUP" ? `<span class="badge live">${short}</span>` :
+          (t.pot === 1 ? '<span class="badge pot1">POT 1</span>' : "") +
+          (t.pot > base ? '<span class="badge bonus">EXTRA PULL</span>' : "");
+        return `<div class="team-row ${s.stage === "WIN" ? "champ" : s.out ? "dead" : ""}">
           <span class="flag">${t.flag}</span>
           <span class="tname">${esc(t.name)}</span>
           <span class="tmeta">FIFA #${t.rank} · GRP ${t.group}</span>
-          ${t.pot === 1 ? '<span class="badge pot1">POT 1</span>' : ""}
-          ${t.pot > base ? '<span class="badge bonus">EXTRA PULL</span>' : ""}
-        </div>`).join("") +
+          ${badge}
+        </div>`;
+      }).join("") +
     `</div>`;
   }).join("");
 
@@ -624,6 +709,49 @@ function renderAll() {
 
   renderTeamBoard(st);
   renderTeamsTable(players);
+  renderKnockout(players, eff);
+}
+
+// The knockout picture, built from the stages set on the Team Board: a
+// left-to-right funnel (R32 → Final) placing each team in the furthest round
+// it reached, plus a roll-call of everyone who's out, grouped by where they
+// fell. Hidden until the knockouts actually start.
+function renderKnockout(players, dash) {
+  const kv = knockoutView(players, dash);
+  const show = kv.started || kv.eliminated.length > 0;
+  $("ko-empty").hidden = show;
+  $("ko-body").hidden = !show;
+  $("ko-note").textContent = kv.started
+    ? `${kv.aliveCount} team${kv.aliveCount === 1 ? "" : "s"} still standing.`
+    : "Who's still standing — and who's gone home.";
+  if (!show) return;
+
+  $("ko-scroll").hidden = !kv.started;
+  $("ko-bracket").innerHTML = kv.rounds.map(r => {
+    const body = r.teams.length
+      ? r.teams.map(t => {
+          const cls = t.status === "champ" ? "champ" : t.status === "runner" ? "runner" : t.status === "out" ? "dead" : "";
+          const mark = t.status === "champ" ? "🏆 " : t.status === "runner" ? "🥈 " : "";
+          return `
+        <div class="ko-team ${cls}">
+          <span class="flag">${t.flag}</span>
+          <span class="nm" title="${esc(t.name)}">${mark}${esc(t.name)}</span>
+          <span class="ow" title="${t.owner ? esc(t.owner) : "unowned"}">${t.owner ? esc(t.owner) : "—"}</span>
+        </div>`;
+        }).join("")
+      : `<div class="ko-empty">—</div>`;
+    return `<div class="ko-col"><h4>${r.label}<span class="n">${r.teams.length || ""}</span></h4>${body}</div>`;
+  }).join("");
+
+  $("elim").innerHTML = kv.eliminated.length
+    ? kv.eliminated.map(g => `
+      <div class="elim-group">
+        <div class="rd"><b>${g.teams.length}</b> out · ${esc(g.label)}</div>
+        <div class="elim-chips">${g.teams.map(t =>
+          `<span class="elim-chip"><span class="tn">${t.flag} ${esc(t.name)}</span>${t.owner ? `<span class="ow">${esc(t.owner)}</span>` : ""}</span>`
+        ).join("")}</div>
+      </div>`).join("")
+    : `<div class="ko-empty">// NOBODY'S OUT YET</div>`;
 }
 
 function fillTeamSelect(sel, current, ownerOf) {
@@ -638,7 +766,8 @@ function renderTeamBoard(st) {
     const teams = TEAMS.filter(t => t.group === g).sort((a, b) => a.rank - b.rank);
     return `<div class="group-box"><h4>Group ${g}</h4>` + teams.map(t => {
       const s = st.stageOf(t.name);
-      return `<div class="tteam ${s.out ? "dead" : ""} ${s.stage === "WIN" ? "champ" : ""}" data-team="${esc(t.name)}">
+      const ovr = !!(state.dash.stages && state.dash.stages[t.name]);
+      return `<div class="tteam ${s.out ? "dead" : ""} ${s.stage === "WIN" ? "champ" : ""} ${ovr ? "ovr-on" : ""}" data-team="${esc(t.name)}" title="${ovr ? "manual override" : "auto from live feed"}">
         <span class="flag">${t.flag}</span>
         <span class="nm" title="${esc(t.name)}">${esc(t.name)}</span>
         <span class="ownr" title="owner">${st.ownerOf[t.name] ? esc(st.ownerOf[t.name]) : "—"}</span>
@@ -1106,20 +1235,35 @@ $("reset-btn").addEventListener("click", () => {
   state = null;
   renderAll();
 });
+$("clear-ovr-btn").addEventListener("click", () => {
+  if (readOnly || !state) return;
+  const n = Object.keys(state.dash.stages || {}).length;
+  if (!n) { toast("NO MANUAL OVERRIDES — ALL AUTO"); return; }
+  if (!confirm(`Clear ${n} manual stage override${n === 1 ? "" : "s"} and let the live feed drive everything?`)) return;
+  state.dash.stages = {};
+  save(); renderAll();
+  toast("OVERRIDES CLEARED — TRACKING THE FEED");
+});
 
 $("boot-team").addEventListener("change", e => { if (readOnly) return; state.dash.bootTeam = e.target.value || null; save(); renderAll(); });
 $("glove-team").addEventListener("change", e => { if (readOnly) return; state.dash.gloveTeam = e.target.value || null; save(); renderAll(); });
 $("spoon-team").addEventListener("change", e => { if (readOnly) return; state.dash.spoonOverride = e.target.value || null; save(); renderAll(); });
 
+// Any Team Board edit writes a manual override into state.dash.stages, which
+// wins over the feed-derived stage. Edits seed from the currently-shown
+// (effective) stage so toggling matches what the admin sees.
 $("group-grid").addEventListener("change", e => {
   if (readOnly || !e.target.classList.contains("stage-sel")) return;
   const team = e.target.closest(".tteam").dataset.team;
   const val = e.target.value;
-  // only one champion / one runner-up: demote any previous holder to semi-finalist
+  const effStages = effectiveDash(state.dash, latestMatches).stages;
+  // only one champion / one runner-up: demote any current holder (auto or manual) to semi-finalist
   if (val === "WIN" || val === "RU") {
-    Object.entries(state.dash.stages).forEach(([n, s]) => { if (n !== team && s.stage === val) s.stage = "SF"; });
+    Object.entries(effStages).forEach(([n, s]) => {
+      if (n !== team && s.stage === val) state.dash.stages[n] = { ...s, stage: "SF" };
+    });
   }
-  const cur = state.dash.stages[team] || { stage: "GROUP", out: false };
+  const cur = { ...(effStages[team] || { stage: "GROUP", out: false }) };
   cur.stage = val;
   if (val === "WIN") cur.out = false;
   state.dash.stages[team] = cur;
@@ -1128,7 +1272,8 @@ $("group-grid").addEventListener("change", e => {
 $("group-grid").addEventListener("click", e => {
   if (readOnly || !e.target.classList.contains("outbtn")) return;
   const team = e.target.closest(".tteam").dataset.team;
-  const cur = state.dash.stages[team] || { stage: "GROUP", out: false };
+  const effStages = effectiveDash(state.dash, latestMatches).stages;
+  const cur = { ...(effStages[team] || { stage: "GROUP", out: false }) };
   cur.out = !cur.out;
   state.dash.stages[team] = cur;
   save(); renderAll();
