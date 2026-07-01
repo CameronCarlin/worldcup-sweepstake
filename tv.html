@@ -117,6 +117,35 @@
   .gteam.champ { background: var(--acid); color: var(--ink); }
   .gteam.champ .own { color: var(--ink); }
 
+  /* knockout bracket — two-sided tree meeting in the middle */
+  .br { display: flex; height: 100%; gap: .5vw; align-items: stretch; }
+  .brside { display: flex; flex: 1; gap: .35vw; min-width: 0; }
+  .brside.brright { flex-direction: row-reverse; }
+  .brround { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .brhdr { flex: none; text-align: center; font-family: "IBM Plex Mono", monospace; font-size: 1.15vh; letter-spacing: .15vh; text-transform: uppercase; color: var(--muted); padding-bottom: .5vh; }
+  .brbody { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: .4vh; min-height: 0; }
+  .brmatch { display: flex; flex-direction: column; gap: 1px; background: var(--line); }
+  .brteam { display: flex; align-items: center; gap: .4vw; background: var(--panel); padding: .28vh .5vw; min-width: 0; font-size: 1.35vh; }
+  .brteam .bf { flex: none; font-size: 1.4vh; }
+  .brteam .bn { flex: 1; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .brteam .bo { flex: none; font-family: "IBM Plex Mono", monospace; font-size: 1.05vh; color: var(--muted); max-width: 4.2vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .brteam.lost { opacity: .38; }
+  .brteam.lost .bn { text-decoration: line-through; }
+  .brteam.champ { background: var(--acid); color: var(--ink); }
+  .brteam.champ .bo { color: var(--ink); }
+  .brteam.runner { background: #2f2f26; }
+  .brteam.tbd .bn { color: #55554d; font-weight: 400; font-family: "IBM Plex Mono", monospace; font-size: 1.1vh; }
+  /* mirror the right half so flags face inward and names read outward */
+  .brright .brteam { flex-direction: row-reverse; text-align: right; }
+  .brcenter { flex: 0 0 13.5vw; display: flex; flex-direction: column; justify-content: center; gap: 2.4vh; min-width: 0; }
+  .brfinal, .brthird { border: 1px solid var(--acid); }
+  .brthird { border-color: var(--line); }
+  .brlabel { font-family: "IBM Plex Mono", monospace; font-size: 1.2vh; letter-spacing: .2vh; text-transform: uppercase; text-align: center; padding: .35vh .5vw; background: var(--acid); color: var(--ink); }
+  .brthird .brlabel { background: var(--line); color: var(--muted); }
+  .brfinal .brteam, .brthird .brteam { justify-content: center; font-size: 1.7vh; padding: .7vh .5vw; }
+  .brthird .brteam { font-size: 1.35vh; padding: .35vh .5vw; }
+  .brfinal .brteam .bo, .brthird .brteam .bo { max-width: 5vw; }
+
   .splash {
     position: absolute; inset: 0; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 3vh; background: var(--ink);
@@ -149,6 +178,10 @@
   <section class="slide" data-title="Wall chart">
     <h2>The <span class="acid">Wall Chart</span></h2>
     <div class="body" id="b-chart"></div>
+  </section>
+  <section class="slide" data-title="Knockout bracket">
+    <h2>The <span class="acid">Knockouts</span></h2>
+    <div class="body" id="b-bracket"></div>
   </section>
   <div class="splash" id="splash" hidden>
     <h1>World Cup 2026</h1>
@@ -197,15 +230,16 @@ function render() {
   const has = !!state;
   $("splash").hidden = has;
   if (!has) return;
-  const dash = state.dash || { stages: {} };
+  const dash = effectiveDash(state.dash, matches); // feed-derived stages + manual overrides
   const { players } = runDraw(state.names, state.seed);
-  const awards = resolveAwardsFrom(dash, matches);
+  const awards = resolveAwardsFrom(state.dash, matches);
   const st = computeStandings(players, dash, awards);
   $("tv-pot").innerHTML = `POT <b>£${st.pot}</b> · ${players.length} PLAYERS · 48 TEAMS`;
   renderStandings(st);
   renderPrizes(st, awards, players.length);
   renderResults();
   renderChart(st);
+  renderBracket(st.ownerOf);
 }
 
 function renderStandings(st) {
@@ -290,6 +324,46 @@ function renderChart(st) {
       </div>`;
     }).join("") + `</div>`;
   }).join("") + `</div>`;
+}
+
+// Two-sided knockout tree that fills a 16:9 screen: 16 teams down each side,
+// rounds converging toward the Final and 3rd-place match in the middle. Built
+// from the feed's fixture graph (buildBracketTree); the loser of each decided
+// tie is struck through, the champion lit up.
+const BR_LABEL = { R32: "R32", R16: "R16", QF: "QF", SF: "Semis" };
+function renderBracket(ownerOf) {
+  ownerOf = ownerOf || {};
+  const bt = buildBracketTree(matches);
+  if (!bt.ok) {
+    $("b-bracket").innerHTML = `<div class="res-empty">// KNOCKOUT BRACKET APPEARS ONCE THE ROUND OF 32 IS SET</div>`;
+    return;
+  }
+  const champName = bt.champion ? bt.champion.name : null;
+  const teamCell = (s, kind) => {
+    if (!s || s.placeholder) return `<div class="brteam tbd"><span class="bn">TBD</span></div>`;
+    const isChamp = kind === "final" && champName && s.name === champName;
+    const isRunner = kind === "final" && bt.final.state === "post" && !isChamp;
+    const cls = isChamp ? "champ" : isRunner ? "runner" : s.lost ? "lost" : "";
+    const mark = isChamp ? "🏆 " : isRunner ? "🥈 " : "";
+    const owner = ownerOf[s.name];
+    return `<div class="brteam ${cls}"><span class="bf">${s.flag}</span>` +
+      `<span class="bn">${mark}${esc(s.name)}</span>` +
+      `<span class="bo">${owner ? esc(owner) : ""}</span></div>`;
+  };
+  const matchBox = m => m ? `<div class="brmatch">${teamCell(m.a)}${teamCell(m.b)}</div>` : "";
+  const side = cols => ["R32", "R16", "QF", "SF"].map(rk =>
+    `<div class="brround"><div class="brhdr">${BR_LABEL[rk]}</div>` +
+    `<div class="brbody">${(cols[rk] || []).map(matchBox).join("")}</div></div>`).join("");
+
+  $("b-bracket").innerHTML =
+    `<div class="br">
+      <div class="brside">${side(bt.left)}</div>
+      <div class="brcenter">
+        <div class="brfinal"><div class="brlabel">Final</div>${teamCell(bt.final.a, "final")}${teamCell(bt.final.b, "final")}</div>` +
+        (bt.third ? `<div class="brthird"><div class="brlabel">3rd place</div>${teamCell(bt.third.a)}${teamCell(bt.third.b)}</div>` : "") +
+      `</div>
+      <div class="brside brright">${side(bt.right)}</div>
+    </div>`;
 }
 
 // rotation

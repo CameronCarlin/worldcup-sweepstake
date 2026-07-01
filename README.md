@@ -25,8 +25,17 @@ deterministic per draw ID, so any draw can be reproduced for the doubters.
 
 Match results pull automatically from ESPN's open World Cup scoreboard feed in
 the browser (keyless, CORS-enabled) — refreshed on load and every 5 minutes.
-No manual result entry. Team eliminations / champion / runner-up are one-click
-updates on the team board.
+No manual result entry. Knockout progress is derived from the same feed (the
+per-match "advance" flag settles extra time and penalties), so eliminations,
+the champion and runner-up track themselves — the leaderboard, the knockout
+bracket, the eliminated list and each player's squad all update on their own.
+Admins can still override any team's stage on the team board; overrides always
+win over the feed, and a button clears them to hand control back to the feed.
+
+The knockout stage is shown two ways: a round-by-round funnel (32 → 16 → 8 →
+4 → 2) with the eliminated roll-call on the main page, and a classic two-sided
+bracket — 16 teams a side, converging on the final and third-place match — on
+the office TV view.
 
 ## Publishing updates
 

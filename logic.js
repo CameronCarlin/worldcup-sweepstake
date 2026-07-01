@@ -286,16 +286,245 @@ function mapScoreboardEvents(d) {
         player: (dt.athletesInvolved && dt.athletesInvolved[0] && dt.athletesInvolved[0].displayName) || "Unknown",
         team: idToTeam[dt.team && dt.team.id] || null,
       }));
+    // knockout matches flag the team that goes through — this already accounts
+    // for extra time and penalty shootouts, so we don't have to.
+    const adv = c.competitors.find(x => x.advance === true)
+      || c.competitors.find(x => x.winner === true) || null;
+    const slug = (e.season && e.season.slug) || "";
     return {
       date: e.date,
-      round: ((e.season && e.season.slug) || "").replace(/-/g, " "),
+      id: (c && c.id) || e.id || null,
+      round: slug.replace(/-/g, " "),
+      roundSlug: slug,
       state: e.status.type.state, // pre | in | post
       detail: e.status.type.shortDetail || "",
       home: home.team.displayName, hs: home.score,
       away: away.team.displayName, as: away.score,
+      advance: adv && adv.team ? adv.team.displayName : null,
       scorers,
     };
   });
+}
+
+// --- automatic stage tracking from the live feed ----------------------------
+// Every match is tagged with its round, and knockout matches flag which team
+// advanced — so each team's furthest stage and its elimination fall straight
+// out of the feed (shootouts included). Manual dash.stages entries are treated
+// as per-team overrides by effectiveDash(), so a human always has the final
+// say if the feed is ever wrong.
+const FEED_ROUND_STAGE = {
+  "round-of-32":   "R32",
+  "round-of-16":   "R16",
+  "quarterfinals": "QF",
+  "semifinals":    "SF",
+  "final":         "FINAL",
+};
+
+function deriveStages(matches) {
+  if (!matches || !matches.length) return {};
+  const order = { R32: 1, R16: 2, QF: 3, SF: 4, FINAL: 5 };
+  // a winner moves to the next round; the SF winner waits at "final" until it's played
+  const nextAfter = { R32: "R16", R16: "QF", QF: "SF", SF: "SF" };
+
+  const rec = {};              // team → furthest knockout appearance
+  const groupTeams = new Set();
+  let knockoutsExist = false;
+
+  for (const m of matches) {
+    if (m.roundSlug === "group-stage") {
+      const h = resolveTeam(m.home), a = resolveTeam(m.away);
+      if (h) groupTeams.add(h.name);
+      if (a) groupTeams.add(a.name);
+      continue;
+    }
+    const stg = FEED_ROUND_STAGE[m.roundSlug];
+    if (!stg) continue;                                   // e.g. 3rd-place match — no stage of its own
+    knockoutsExist = true;
+    if (stg === "FINAL" && m.state !== "post") continue;  // don't crown anyone until the final is decided
+    const h = resolveTeam(m.home), a = resolveTeam(m.away);
+    if (!h || !a) continue;
+    const advName = m.advance ? (resolveTeam(m.advance) || {}).name : null;
+    for (const team of [h, a]) {
+      const prev = rec[team.name];
+      if (!prev || order[stg] > order[prev.stage]) {
+        rec[team.name] = { stage: stg, post: m.state === "post", advanced: m.state === "post" && advName === team.name };
+      }
+    }
+  }
+
+  const stages = {};
+  for (const [name, r] of Object.entries(rec)) {
+    if (r.stage === "FINAL") stages[name] = r.advanced ? { stage: "WIN", out: false } : { stage: "RU", out: true };
+    else if (!r.post)        stages[name] = { stage: r.stage, out: false };          // playing / awaiting this round
+    else if (r.advanced)     stages[name] = { stage: nextAfter[r.stage], out: false }; // won it — alive in the next round
+    else                     stages[name] = { stage: r.stage, out: true };           // lost it — out here
+  }
+  // once the knockouts exist, any group team that didn't reach them is out
+  if (knockoutsExist) groupTeams.forEach(name => { if (!rec[name]) stages[name] = { stage: "GROUP", out: true }; });
+  return stages;
+}
+
+// Feed-derived stages with manual dash.stages layered on top (overrides win).
+function effectiveDash(dash, matches) {
+  dash = dash || { stages: {} };
+  return { ...dash, stages: { ...deriveStages(matches), ...(dash.stages || {}) } };
+}
+
+// --- knockout bracket / eliminations ---------------------------------------
+// Built from the manually-maintained dash.stages (the same source the
+// leaderboard's "best run" uses). There are no head-to-head pairings in the
+// data, so this reads as a round funnel — 32 → 16 → 8 → 4 → 2, left to right.
+// Each team appears in every round it REACHED (so the columns halve like a
+// real bracket); a strikethrough marks the round its run ended. Group-stage
+// casualties are collected separately.
+const KO_ROUNDS = [
+  { key: "R32", label: "Round of 32",    short: "R32",   stages: ["R32"] },
+  { key: "R16", label: "Round of 16",    short: "R16",   stages: ["R16"] },
+  { key: "QF",  label: "Quarter-finals", short: "QF",    stages: ["QF"]  },
+  { key: "SF",  label: "Semi-finals",    short: "SF",    stages: ["SF"]  },
+  { key: "FIN", label: "Final",          short: "FINAL", stages: ["RU", "WIN"] },
+];
+
+function knockoutView(players, dash) {
+  dash = dash || { stages: {} };
+  const ownerOf = {};
+  (players || []).forEach(pl => pl.teams.forEach(t => (ownerOf[t.name] = pl.name)));
+  const stageOf = name => (dash.stages[name] || { stage: "GROUP", out: false });
+
+  const all = TEAMS.map(t => {
+    const s = stageOf(t.name);
+    return {
+      name: t.name, flag: t.flag, rank: t.rank, group: t.group,
+      owner: ownerOf[t.name] || null,
+      stage: s.stage, out: !!s.out,
+      champ: s.stage === "WIN", runner: s.stage === "RU",
+    };
+  });
+  const orderOf = t => STAGE_ORDER[t.stage];
+
+  // Each round column holds every team that reached it. Per column, a team is:
+  //   champ / runner — only in the Final; the two finalists
+  //   out            — its run ended in this exact round (struck through)
+  //   in             — it won this round (advanced) or is still playing it
+  const statusRank = { champ: 0, in: 1, runner: 2, out: 3 };
+  const rounds = KO_ROUNDS.map(r => {
+    const threshold = STAGE_ORDER[r.stages[0]]; // R32→1 … FIN→RU(5)
+    const isFinal = r.key === "FIN";
+    const teams = all
+      .filter(t => orderOf(t) >= threshold)
+      .map(t => {
+        let status;
+        if (isFinal && t.champ) status = "champ";
+        else if (isFinal && t.runner) status = "runner";
+        else if (orderOf(t) === threshold && t.out && !t.champ) status = "out";
+        else status = "in";
+        return { ...t, status };
+      })
+      .sort((a, b) => (statusRank[a.status] - statusRank[b.status]) || (a.rank - b.rank));
+    return { ...r, teams };
+  });
+
+  const EXITS = [
+    { key: "GROUP", label: "Group stage" },
+    { key: "R32",   label: "Round of 32" },
+    { key: "R16",   label: "Round of 16" },
+    { key: "QF",    label: "Quarter-finals" },
+    { key: "SF",    label: "Semi-finals" },
+  ];
+  const eliminated = EXITS
+    .map(e => ({
+      key: e.key, label: e.label,
+      teams: all.filter(t => t.out && t.stage === e.key && !t.champ && !t.runner)
+                .sort((a, b) => a.rank - b.rank),
+    }))
+    .filter(g => g.teams.length);
+
+  const started = all.some(t => STAGE_ORDER[t.stage] >= STAGE_ORDER.R32);
+  return {
+    rounds, eliminated, started,
+    aliveCount: all.filter(t => !t.out).length,
+    champion: all.find(t => t.champ) || null,
+    runnerUp: all.find(t => t.runner) || null,
+    ownerOf,
+  };
+}
+
+// --- two-sided knockout bracket tree (for the 16:9 TV view) ------------------
+// The feed names every knockout fixture by its feeders — "Round of 16 2 Winner
+// at Round of 16 1 Winner", "Semifinal 1 Winner", "Semifinal 1 Loser" — and
+// numbers matches sequentially by competition id within a round. That's enough
+// to rebuild the exact tree: match a slot to the earlier match its team won,
+// or to the numbered placeholder it names. The two Semi-final subtrees are the
+// left and right halves (16 teams each); the Final and 3rd-place sit in the
+// middle. `advance` (which resolves shootouts) marks the winner of each tie.
+function parseSlotRef(name) {
+  const m = /^(Round of 32|Round of 16|Quarterfinal|Semifinal) (\d+) (Winner|Loser)$/.exec(name || "");
+  if (!m) return null;
+  const round = { "Round of 32": "R32", "Round of 16": "R16", "Quarterfinal": "QF", "Semifinal": "SF" }[m[1]];
+  return { round, num: parseInt(m[2], 10), wl: m[3] };
+}
+
+const FEED_KO_ROUND = {
+  "round-of-32": "R32", "round-of-16": "R16", "quarterfinals": "QF",
+  "semifinals": "SF", "final": "FINAL", "3rd-place-match": "THIRD",
+};
+const BR_PREV = { SF: "QF", QF: "R16", R16: "R32" };
+
+function buildBracketTree(matches) {
+  if (!matches || !matches.length) return { ok: false };
+  const byRound = { R32: [], R16: [], QF: [], SF: [], FINAL: [], THIRD: [] };
+  matches.forEach(m => { const k = FEED_KO_ROUND[m.roundSlug]; if (k) byRound[k].push(m); });
+  if (!byRound.FINAL.length || byRound.R32.length < 2 || !byRound.SF.length) return { ok: false };
+  Object.keys(byRound).forEach(k =>
+    byRound[k].sort((a, b) => (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0)));
+
+  const advNameOf = m => (m.advance ? (resolveTeam(m.advance) || {}).name || m.advance : null);
+  const slotInfo = (name, m) => {
+    const ref = parseSlotRef(name);
+    if (ref) return { placeholder: true, ref };
+    const rt = resolveTeam(name);
+    const nm = rt ? rt.name : name;
+    const adv = advNameOf(m);
+    return {
+      placeholder: false, name: nm, flag: rt ? rt.flag : "",
+      advanced: m.state === "post" && adv === nm,
+      lost: m.state === "post" && !!adv && adv !== nm,
+    };
+  };
+  const matchSlots = m => ({ a: slotInfo(m.home, m), b: slotInfo(m.away, m), state: m.state });
+
+  const childOf = (s, srcKey) => {
+    if (!srcKey) return null;
+    if (s.placeholder) return (byRound[s.ref.round] || byRound[srcKey] || [])[s.ref.num - 1] || null;
+    return (byRound[srcKey] || []).find(m => advNameOf(m) === s.name) || null;
+  };
+
+  // DFS one Semi-final subtree into columns, keeping top-to-bottom order
+  const collect = sfMatch => {
+    const cols = { SF: [], QF: [], R16: [], R32: [] };
+    const walk = (m, rk) => {
+      const ms = matchSlots(m);
+      cols[rk].push(ms);
+      if (rk === "R32") return;
+      const src = BR_PREV[rk];
+      [ms.a, ms.b].forEach(s => { const c = childOf(s, src); if (c) walk(c, src); });
+    };
+    walk(sfMatch, "SF");
+    return cols;
+  };
+
+  const final = matchSlots(byRound.FINAL[0]);
+  const leftSF = childOf(final.a, "SF"), rightSF = childOf(final.b, "SF");
+  if (!leftSF || !rightSF) return { ok: false };
+  const champion = final.a.advanced ? final.a : final.b.advanced ? final.b : null;
+
+  return {
+    ok: true,
+    left: collect(leftSF),
+    right: collect(rightSF),
+    final, champion,
+    third: byRound.THIRD.length ? matchSlots(byRound.THIRD[0]) : null,
+  };
 }
 
 // Feed-derived boot/glove/spoon, with any admin overrides from dash.
